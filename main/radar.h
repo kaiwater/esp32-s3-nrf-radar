@@ -11,6 +11,7 @@
 typedef struct {
     nrf_t nrf[3];
     bool present[3];
+    unsigned modules;   /* bit0=A, bit1=B, bit2=C */
 
     struct {
         int tx;

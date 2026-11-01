@@ -12,8 +12,9 @@ static void radar_task(void *arg)
     (void)arg;
     radar_init(&s_radar);
 
-    st7735_draw_radar(s_radar.view, s_radar.link_count, s_radar.channel,
-                      s_radar.motion, s_radar.paused, s_radar.calibrating);
+    st7735_draw_radar(s_radar.view, s_radar.link_count, s_radar.modules,
+                      s_radar.channel, s_radar.motion, s_radar.paused,
+                      s_radar.calibrating);
 
     int64_t next = 0;
 
@@ -39,8 +40,9 @@ static void radar_task(void *arg)
         }
 
         if (redraw) {
-            st7735_draw_radar(s_radar.view, s_radar.link_count, s_radar.channel,
-                              s_radar.motion, s_radar.paused, s_radar.calibrating);
+            st7735_draw_radar(s_radar.view, s_radar.link_count, s_radar.modules,
+                              s_radar.channel, s_radar.motion, s_radar.paused,
+                              s_radar.calibrating);
         }
 
         vTaskDelay(pdMS_TO_TICKS(20));

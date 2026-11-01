@@ -43,6 +43,7 @@ void radar_init(radar_t *r)
     const int ce[3] = NRF_CE_PINS;
     for (int i = 0; i < 3; i++) {
         r->present[i] = nrf_init(&r->nrf[i], csn[i], ce[i]);
+        if (r->present[i]) r->modules |= 1u << i;
     }
 
     /* Two modules give one link; three give the three-link triangle. */

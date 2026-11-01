@@ -273,7 +273,8 @@ void st7735_init(void)
 }
 
 void st7735_draw_radar(const radar_view_link_t *links, unsigned nlinks,
-                       unsigned channel, bool motion, bool paused, bool calibrating)
+                       unsigned modules, unsigned channel,
+                       bool motion, bool paused, bool calibrating)
 {
     if (!s_panel || !s_strip) return;
 
@@ -332,7 +333,14 @@ void st7735_draw_radar(const radar_view_link_t *links, unsigned nlinks,
 
         if (y0 + STRIP_H > STATUS_Y) {
             if (nlinks == 0) {
-                text8(4, 116, "NO NRF", 1, COL_DIM);
+                if (modules == 0) {
+                    text8(4, 116, "NO NRF", 1, COL_DIM);
+                } else {
+                    const char *name = (modules & 1) ? "A" : (modules & 2) ? "B" : "C";
+                    char m[20];
+                    snprintf(m, sizeof(m), "%s OK  NEED 2", name);
+                    text8(4, 116, m, 1, COL_GREEN);
+                }
             } else if (paused) {
                 text8(4, 116, "PAUSED", 1, COL_DIM);
             } else if (calibrating) {
