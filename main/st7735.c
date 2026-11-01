@@ -436,6 +436,82 @@ void st7735_draw_radar(const radar_view_t *v)
     }
 }
 
+void st7735_draw_scan(const scan_view_t *v)
+{
+    if (!s_panel || !s_strip || !v) return;
+    const ui_theme_t *c = &s_themes[s_theme];
+
+    for (int y0 = 0; y0 < HEIGHT; y0 += STRIP_H) {
+        s_strip_y = y0;
+        clear_strip();
+
+        if (y0 < 20) {
+            text8(4, 1, "2.4G", 2, c->text);
+            text8(72, 8, "SCAN", 1, c->accent);
+            text3x5(140, 3, "0-82", 1, c->dim);
+        }
+
+        if (y0 < 66 && y0 + STRIP_H > 20) {
+            for (int x = 0; x < SCAN_COLS; x++) {
+                unsigned ch = x * (SCAN_CHANNELS - 1) / (SCAN_COLS - 1);
+                int val = (v->delta_mode && v->have_baseline)
+                              ? (v->delta[ch] > 0 ? v->delta[ch] : 0)
+                              : v->duty[ch];
+                if (val < 0) val = 0;
+                if (val > 100) val = 100;
+                int h = val * 44 / 100;
+                uint16_t col = s_heat[val * 255 / 100];
+                for (int y = 64 - h; y <= 64; y++) {
+                    px(x * 2, y, col);
+                    px(x * 2 + 1, y, col);
+                }
+            }
+            for (int x = 0; x < WIDTH; x++) px(x, 65, c->dim);
+        }
+
+        char s[32];
+        if (y0 + STRIP_H > 68 && y0 <= 76) {
+            int freq = 2400 + (int)v->peak_ch;
+            if (v->delta_mode && v->have_baseline)
+                snprintf(s, sizeof(s), "PEAK %d %+d", freq, v->peak_val);
+            else
+                snprintf(s, sizeof(s), "PEAK %d %d%%", freq, v->peak_val);
+            text8(4, 68, s, 1, c->text);
+            text3x5(140, 70, v->delta_mode ? "DLT" : "ABS", 1, c->accent);
+        }
+
+        if (y0 + STRIP_H > 78 && y0 <= 86) {
+            if (v->booting) {
+                text8(4, 78, "BOOTING", 1, c->text);
+            } else if (!v->radio_ok) {
+                text8(4, 78, "NO NRF", 1, c->dim);
+            } else if (v->paused) {
+                text8(4, 78, "PAUSED", 1, c->dim);
+            } else {
+                snprintf(s, sizeof(s), "SCAN %u", v->scans);
+                text8(4, 78, s, 1, c->dim);
+            }
+            text3x5(100, 80, v->have_baseline ? "BASE" : "NOBASE", 1, c->dim);
+            if (!v->radio_ok && !v->booting) text3x5(136, 80, "K4 RST", 1, c->dim);
+        }
+
+        for (int r = 0; r < SCAN_ROWS; r++) {
+            int y = 86 + r * 6;
+            if (y >= y0 + STRIP_H || y + 5 <= y0) continue;
+            for (int x = 0; x < SCAN_COLS; x++) {
+                uint16_t col = s_heat[v->wf[r][x]];
+                for (int k = 0; k < 5; k++) {
+                    px(x * 2, y + k, col);
+                    px(x * 2 + 1, y + k, col);
+                }
+            }
+        }
+
+        ESP_ERROR_CHECK(esp_lcd_panel_draw_bitmap(s_panel, 0, y0, WIDTH, y0 + STRIP_H, s_strip));
+        if (s_flush_done) xSemaphoreTake(s_flush_done, pdMS_TO_TICKS(200));
+    }
+}
+
 int st7735_button(void)
 {
     static uint8_t stable;
