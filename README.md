@@ -66,7 +66,8 @@ idf.py -B build -p /dev/cu.usbserial-XXXX flash
 |---|---|
 | K1 | 通道 +1（70..90，默认 80 = 2480MHz） |
 | K2 | 通道 −1 |
-| K3 | 重新校准基线 |
+| K3 短按 | 重新校准基线 |
+| K3 长按（≥700ms） | 切换下一套配色（T1..T10） |
 | K4 | 暂停 / 继续 |
 
 - 上电后先做约 20 帧基线校准，屏幕显示 `CALIBRATING`。
@@ -74,6 +75,34 @@ idf.py -B build -p /dev/cu.usbserial-XXXX flash
 - 底部历史条显示最近约 160 帧的链路质量。
 - 任一链路明显偏离基线 → `MOTION`。
 - 没有检测到 NRF 模块 → `NO NRF`。
+
+## 界面数据
+
+- 每条链路：质量条、`L` 丢包率、`R` 重传数
+- 底部历史：最近约 160 帧的链路质量
+- `TX` / `RX`：累计发包数 / 收包数
+- `F`：失败包数
+- `R`：累计重传数
+- `N`：RPD 占空比 0–100，表示当前通道“忙/噪声”程度
+  - NRF24L01 没有校准 dBm RSSI；`N` 是相对值，不是 dBm
+- 单模块时没有链路，但仍会显示 `N`，可用来确认模块工作
+
+## 10 套配色
+
+长按 K3 循环，右上角显示 `T1`..`T10`：
+
+| 编号 | 名称 | 来源 |
+|---|---|---|
+| T1 | PHO | 荧光绿 CRT |
+| T2 | AMB | 琥珀 CRT |
+| T3 | ICE | 冰蓝 CRT |
+| T4 | DRA | Dracula |
+| T5 | NRD | Nord |
+| T6 | GRU | Gruvbox |
+| T7 | SOL | Solarized Dark |
+| T8 | TOK | Tokyo Night |
+| T9 | CAT | Catppuccin Mocha |
+| T10 | MON | Monokai |
 
 ## 指标
 

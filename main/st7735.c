@@ -1,4 +1,4 @@
-/* ST7735 160x128 radar UI for the ESP32-S3 NRF24L01 link-quality sensor. */
+/* ST7735 160x128 radar UI: 10 palettes, link stats, RPD noise index. */
 #include "st7735.h"
 
 #include <stdio.h>
@@ -35,18 +35,37 @@
 #define PIN_BTN_OK 6
 #define PIN_BTN_BACK 14
 
-#define LINK_Y 20
+#define STATUS_Y 18
+#define LINK_Y 24
 #define LINK_STEP 18
-#define HIST_Y 80
-#define HIST_STEP 10
-#define STATUS_Y 112
+#define HIST_Y 76
+#define HIST_STEP 9
+#define STATS1_Y 104
+#define STATS2_Y 114
+
+#define BTN_LONG_MS 700
 
 #define RGB565(r, g, b) ((uint16_t)((((r) >> 3) << 11) | (((g) >> 2) << 5) | ((b) >> 3)))
-#define COL_BG     RGB565(0x00, 0x00, 0x00)
-#define COL_TEXT   RGB565(0xCC, 0xFF, 0xDD)
-#define COL_GREEN  RGB565(0x33, 0xFF, 0x66)
-#define COL_DIM    RGB565(0x1E, 0x8A, 0x46)
-#define COL_DARK   RGB565(0x06, 0x2A, 0x14)
+
+typedef struct {
+    const char *abbr;
+    uint16_t bg, text, accent, dim, dark;
+} ui_theme_t;
+
+/* Ten well-known editor/terminal palettes plus phosphor/amber/ice CRT. */
+static const ui_theme_t s_themes[] = {
+    {"PHO", RGB565(0x00, 0x00, 0x00), RGB565(0xCC, 0xFF, 0xDD), RGB565(0x33, 0xFF, 0x66), RGB565(0x1E, 0x8A, 0x46), RGB565(0x06, 0x2A, 0x14)},
+    {"AMB", RGB565(0x00, 0x00, 0x00), RGB565(0xFF, 0xE0, 0xB0), RGB565(0xFF, 0xB0, 0x00), RGB565(0x8A, 0x5A, 0x00), RGB565(0x2A, 0x1A, 0x00)},
+    {"ICE", RGB565(0x00, 0x00, 0x00), RGB565(0xD8, 0xF4, 0xFF), RGB565(0x4F, 0xD8, 0xFF), RGB565(0x2A, 0x7A, 0x9A), RGB565(0x06, 0x2A, 0x3A)},
+    {"DRA", RGB565(0x28, 0x2A, 0x36), RGB565(0xF8, 0xF8, 0xF2), RGB565(0xBD, 0x93, 0xF9), RGB565(0x62, 0x72, 0xA4), RGB565(0x44, 0x47, 0x5A)},
+    {"NRD", RGB565(0x2E, 0x34, 0x40), RGB565(0xEC, 0xEF, 0xF4), RGB565(0x88, 0xC0, 0xD0), RGB565(0x4C, 0x56, 0x6A), RGB565(0x3B, 0x42, 0x52)},
+    {"GRU", RGB565(0x28, 0x28, 0x28), RGB565(0xEB, 0xDB, 0xB2), RGB565(0xFA, 0xBD, 0x2F), RGB565(0x92, 0x83, 0x74), RGB565(0x3C, 0x38, 0x36)},
+    {"SOL", RGB565(0x00, 0x2B, 0x36), RGB565(0xEE, 0xE8, 0xD5), RGB565(0x2A, 0xA1, 0x98), RGB565(0x58, 0x6E, 0x75), RGB565(0x07, 0x36, 0x42)},
+    {"TOK", RGB565(0x1A, 0x1B, 0x26), RGB565(0xC0, 0xCA, 0xF5), RGB565(0x7A, 0xA2, 0xF7), RGB565(0x56, 0x5F, 0x89), RGB565(0x24, 0x28, 0x3B)},
+    {"CAT", RGB565(0x1E, 0x1E, 0x2E), RGB565(0xCD, 0xD6, 0xF4), RGB565(0xF5, 0xC2, 0xE7), RGB565(0x6C, 0x70, 0x86), RGB565(0x31, 0x32, 0x44)},
+    {"MON", RGB565(0x27, 0x28, 0x22), RGB565(0xF8, 0xF8, 0xF2), RGB565(0xA6, 0xE2, 0x2E), RGB565(0x75, 0x71, 0x5E), RGB565(0x3E, 0x3D, 0x32)},
+};
+#define THEME_COUNT (sizeof(s_themes) / sizeof(s_themes[0]))
 
 static const char *TAG = "st7735";
 static esp_lcd_panel_handle_t s_panel;
@@ -55,8 +74,8 @@ static SemaphoreHandle_t s_flush_done;
 static uint16_t *s_strip;
 static int s_strip_y;
 static uint8_t s_hist[3][WIDTH];
+static unsigned s_theme;
 
-/* 8x8 font, public domain (font8x8 / VGA-derived). */
 static const uint8_t s_font8[64][8] = {
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, /*   */
     {0x18, 0x3C, 0x3C, 0x18, 0x18, 0x00, 0x18, 0x00}, /* ! */
@@ -190,7 +209,8 @@ static void text8(int x, int y, const char *s, int scale, uint16_t color)
 
 static void clear_strip(void)
 {
-    uint32_t pair = ((uint32_t)COL_BG << 16) | COL_BG;
+    uint16_t bg = s_themes[s_theme].bg;
+    uint32_t pair = ((uint32_t)bg << 16) | bg;
     uint32_t *p = (uint32_t *)s_strip;
     for (int i = 0; i < STRIP_PIXELS / 2; i++) p[i] = pair;
 }
@@ -203,6 +223,11 @@ static bool on_color_done(esp_lcd_panel_io_handle_t io, esp_lcd_panel_io_event_d
     BaseType_t hp = pdFALSE;
     xSemaphoreGiveFromISR(s_flush_done, &hp);
     return hp == pdTRUE;
+}
+
+void st7735_next_theme(void)
+{
+    s_theme = (s_theme + 1) % THEME_COUNT;
 }
 
 void st7735_init(void)
@@ -272,86 +297,100 @@ void st7735_init(void)
     ESP_LOGI(TAG, "ST7735 ready");
 }
 
-void st7735_draw_radar(const radar_view_link_t *links, unsigned nlinks,
-                       unsigned modules, unsigned channel,
-                       bool motion, bool paused, bool calibrating)
+void st7735_draw_radar(const radar_view_t *v)
 {
-    if (!s_panel || !s_strip) return;
+    if (!s_panel || !s_strip || !v) return;
+    const ui_theme_t *c = &s_themes[s_theme];
 
     for (int i = 0; i < 3; i++) {
         memmove(&s_hist[i][0], &s_hist[i][1], WIDTH - 1);
-        unsigned v = 0;
-        if (i < (int)nlinks && links[i].active) {
-            v = links[i].loss_pct * 2 + links[i].retries;
-            if (v > 255) v = 255;
+        unsigned val = 0;
+        if (i < (int)v->nlinks && v->link[i].active) {
+            val = v->link[i].loss_pct * 2 + v->link[i].retries;
+            if (val > 255) val = 255;
         }
-        s_hist[i][WIDTH - 1] = (uint8_t)v;
+        s_hist[i][WIDTH - 1] = (uint8_t)val;
     }
 
-    char ch[8];
-    snprintf(ch, sizeof(ch), "CH %u", channel);
+    char ch[8], th[12];
+    snprintf(ch, sizeof(ch), "CH %u", v->channel);
+    snprintf(th, sizeof(th), "T%u %s", s_theme + 1, c->abbr);
 
     for (int y0 = 0; y0 < HEIGHT; y0 += STRIP_H) {
         s_strip_y = y0;
         clear_strip();
 
-        if (y0 < LINK_Y) {
-            text8(4, 1, "RF SENSE", 2, COL_TEXT);
-            text3x5(136, 8, ch, 1, COL_DIM);
+        if (y0 < STATUS_Y) {
+            text8(4, 1, "RF SENSE", 2, c->text);
+            text3x5(136, 3, ch, 1, c->dim);
+        }
+
+        if (y0 + STRIP_H > STATUS_Y && y0 <= STATUS_Y + 5) {
+            const char *st = "CLEAR";
+            uint16_t sc = c->accent;
+            char m[20];
+            if (v->nlinks == 0) {
+                if (v->modules == 0) {
+                    st = "NO NRF";
+                    sc = c->dim;
+                } else {
+                    const char *name = (v->modules & 1) ? "A" : (v->modules & 2) ? "B" : "C";
+                    snprintf(m, sizeof(m), "%s OK NEED 2", name);
+                    st = m;
+                }
+            } else if (v->paused) {
+                st = "PAUSED";
+                sc = c->dim;
+            } else if (v->calibrating) {
+                st = "CALIBRATING";
+                sc = c->text;
+            } else if (v->motion) {
+                st = "MOTION";
+                sc = c->accent;
+            }
+            text3x5(4, STATUS_Y, st, 1, sc);
+            text3x5(128, STATUS_Y, th, 1, c->dim);
         }
 
         for (int i = 0; i < 3; i++) {
             int y = LINK_Y + i * LINK_STEP;
             if (y >= y0 + STRIP_H || y + 12 <= y0) continue;
-            if (i < (int)nlinks && links[i].active) {
-                text8(4, y, links[i].name, 1, COL_GREEN);
+            if (i < (int)v->nlinks && v->link[i].active) {
+                text8(4, y, v->link[i].name, 1, c->accent);
                 const int bx = 28, by = y + 1, bw = 88, bh = 8;
-                rect(bx, by, bw, bh, COL_DARK);
-                unsigned q = links[i].quality;
+                rect(bx, by, bw, bh, c->dark);
+                unsigned q = v->link[i].quality;
                 if (q > 100) q = 100;
-                rect(bx, by, (int)(bw * q / 100), bh, COL_GREEN);
-                rect(bx, by, bw, 1, COL_DIM);
+                rect(bx, by, (int)(bw * q / 100), bh, c->accent);
+                rect(bx, by, bw, 1, c->dim);
                 char t[16];
-                snprintf(t, sizeof(t), "L%u", links[i].loss_pct);
-                text3x5(120, y + 2, t, 1, COL_DIM);
-                snprintf(t, sizeof(t), "R%u", links[i].retries);
-                text3x5(140, y + 2, t, 1, COL_DIM);
+                snprintf(t, sizeof(t), "L%u", v->link[i].loss_pct);
+                text3x5(120, y + 2, t, 1, c->dim);
+                snprintf(t, sizeof(t), "R%u", v->link[i].retries);
+                text3x5(140, y + 2, t, 1, c->dim);
             } else {
-                text8(4, y, "--", 1, COL_DIM);
+                text8(4, y, "--", 1, c->dim);
             }
         }
 
         for (int i = 0; i < 3; i++) {
             int y = HIST_Y + i * HIST_STEP;
-            if (y >= y0 + STRIP_H || y + 6 <= y0) continue;
+            if (y >= y0 + STRIP_H || y + 7 <= y0) continue;
             for (int x = 0; x < WIDTH; x++) {
-                uint8_t v = s_hist[i][x];
-                uint16_t c = v < 24 ? COL_DARK : v < 80 ? COL_DIM : v < 160 ? COL_GREEN : COL_TEXT;
-                for (int k = 0; k < 6; k++) px(x, y + k, c);
+                uint8_t val = s_hist[i][x];
+                uint16_t col = val < 24 ? c->dark : val < 80 ? c->dim : val < 160 ? c->accent : c->text;
+                for (int k = 0; k < 7; k++) px(x, y + k, col);
             }
         }
 
-        if (y0 + STRIP_H > STATUS_Y) {
-            if (nlinks == 0) {
-                if (modules == 0) {
-                    text8(4, 116, "NO NRF", 1, COL_DIM);
-                } else {
-                    const char *name = (modules & 1) ? "A" : (modules & 2) ? "B" : "C";
-                    char m[20];
-                    snprintf(m, sizeof(m), "%s OK  NEED 2", name);
-                    text8(4, 116, m, 1, COL_GREEN);
-                }
-            } else if (paused) {
-                text8(4, 116, "PAUSED", 1, COL_DIM);
-            } else if (calibrating) {
-                text8(4, 116, "CALIBRATING", 1, COL_GREEN);
-            } else if (motion) {
-                rect(0, STATUS_Y, WIDTH, HEIGHT - STATUS_Y, COL_GREEN);
-                text8(4, 116, "MOTION", 1, COL_BG);
-            } else {
-                text8(4, 116, "CLEAR", 1, COL_GREEN);
-                text8(108, 116, "K3 CAL", 1, COL_DIM);
-            }
+        char s[40];
+        if (y0 + STRIP_H > STATS1_Y && y0 <= STATS1_Y + 8) {
+            snprintf(s, sizeof(s), "TX%lu RX%lu", v->tx, v->rx);
+            text8(4, STATS1_Y, s, 1, c->text);
+        }
+        if (y0 + STRIP_H > STATS2_Y && y0 <= STATS2_Y + 8) {
+            snprintf(s, sizeof(s), "F%lu N%u R%lu", v->fail, v->noise, v->retry);
+            text8(4, STATS2_Y, s, 1, c->dim);
         }
 
         ESP_ERROR_CHECK(esp_lcd_panel_draw_bitmap(s_panel, 0, y0, WIDTH, y0 + STRIP_H, s_strip));
@@ -365,6 +404,7 @@ int st7735_button(void)
     static uint32_t last;
     static uint32_t down_at[4];
     static bool was_down[4];
+    static bool long_sent[4];
 
     uint8_t raw = 0;
     if (gpio_get_level(PIN_BTN_UP) == 0) raw |= 1;
@@ -379,12 +419,21 @@ int st7735_button(void)
 
     for (int i = 0; i < 4; i++) {
         bool down = (stable >> i) & 1;
-        if (down && !was_down[i]) down_at[i] = now;
+        if (down && !was_down[i]) {
+            down_at[i] = now;
+            long_sent[i] = false;
+            was_down[i] = true;
+            continue;
+        }
+        if (down && !long_sent[i] && now - down_at[i] >= BTN_LONG_MS) {
+            long_sent[i] = true;
+            return 11 + i;
+        }
         if (!down && was_down[i]) {
             was_down[i] = false;
-            if (now - down_at[i] >= 30) return i + 1;
+            if (!long_sent[i] && now - down_at[i] >= 30) return i + 1;
+            long_sent[i] = false;
         }
-        was_down[i] = down;
     }
     return 0;
 }

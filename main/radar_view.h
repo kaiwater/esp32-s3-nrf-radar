@@ -2,7 +2,6 @@
 
 #include <stdbool.h>
 
-/* Shared view of one radio link, filled by radar.c and drawn by st7735.c. */
 typedef struct {
     char name[3];        /* "AB", "AC", "BC" */
     bool active;
@@ -10,3 +9,21 @@ typedef struct {
     unsigned retries;    /* accumulated ARC_CNT over the burst */
     unsigned quality;    /* 100 - loss_pct */
 } radar_view_link_t;
+
+typedef struct {
+    radar_view_link_t link[3];
+    unsigned nlinks;
+
+    unsigned modules;    /* bit0=A, bit1=B, bit2=C */
+    unsigned channel;
+
+    unsigned long tx;    /* packets sent this calibration window */
+    unsigned long rx;    /* packets received */
+    unsigned long fail;  /* packets lost */
+    unsigned long retry; /* retries */
+    unsigned noise;      /* RPD busy ratio, 0..100 (relative, not dBm) */
+
+    bool motion;
+    bool paused;
+    bool calibrating;
+} radar_view_t;

@@ -12,14 +12,14 @@ static void radar_task(void *arg)
     (void)arg;
     radar_init(&s_radar);
 
-    st7735_draw_radar(s_radar.view, s_radar.link_count, s_radar.modules,
-                      s_radar.channel, s_radar.motion, s_radar.paused,
-                      s_radar.calibrating);
+    st7735_draw_radar(&s_radar.view);
 
     int64_t next = 0;
 
     for (;;) {
         int b = st7735_button();
+        bool redraw = b != 0;
+
         if (b == 1) {
             radar_set_channel(&s_radar, s_radar.channel >= 90 ? 70 : s_radar.channel + 1);
         } else if (b == 2) {
@@ -27,23 +27,20 @@ static void radar_task(void *arg)
         } else if (b == 3) {
             radar_calibrate(&s_radar);
         } else if (b == 4) {
-            s_radar.paused = !s_radar.paused;
+            s_radar.view.paused = !s_radar.view.paused;
+        } else if (b == 13) {
+            /* Long K3: next colour theme. */
+            st7735_next_theme();
         }
 
         int64_t now = esp_timer_get_time();
-        bool redraw = b != 0;
-
-        if (!s_radar.paused && now >= next) {
+        if (!s_radar.view.paused && now >= next) {
             next = now + 150000;
             radar_step(&s_radar);
             redraw = true;
         }
 
-        if (redraw) {
-            st7735_draw_radar(s_radar.view, s_radar.link_count, s_radar.modules,
-                              s_radar.channel, s_radar.motion, s_radar.paused,
-                              s_radar.calibrating);
-        }
+        if (redraw) st7735_draw_radar(&s_radar.view);
 
         vTaskDelay(pdMS_TO_TICKS(20));
     }

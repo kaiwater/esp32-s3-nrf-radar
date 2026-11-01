@@ -11,7 +11,6 @@
 typedef struct {
     nrf_t nrf[3];
     bool present[3];
-    unsigned modules;   /* bit0=A, bit1=B, bit2=C */
 
     struct {
         int tx;
@@ -19,13 +18,8 @@ typedef struct {
         uint8_t addr[5];
     } link[RADAR_MAX_LINKS];
 
-    radar_view_link_t view[RADAR_MAX_LINKS];
-    unsigned link_count;
-
+    radar_view_t view;
     uint8_t channel;
-    bool motion;
-    bool paused;
-    bool calibrating;
 
     unsigned cal_frames;
     unsigned cal_loss[RADAR_MAX_LINKS];
