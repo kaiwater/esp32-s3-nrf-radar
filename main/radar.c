@@ -3,7 +3,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "driver/gpio.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_rom_sys.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -11,11 +13,28 @@
 #define RADAR_PACKETS 16
 #define RADAR_CAL_FRAMES 20
 #define RADAR_CHANNEL 80
-#define RADAR_SETTLE_MS 800
-#define RADAR_PROBE_GAP_MS 400
+#define RADAR_SETTLE_MS 1500
+#define RADAR_PROBE_GAP_MS 500
+#define RADAR_PROBE_TRIES 6
+#define RADAR_PROBE_RETRY_MS 300
 #define REG_RPD 0x09
 
 static const char *TAG = "radar";
+
+#if NRF_PWR_EN_PIN >= 0
+static void nrf_power_cycle(void)
+{
+    const gpio_config_t io = {
+        .pin_bit_mask = 1ULL << NRF_PWR_EN_PIN,
+        .mode = GPIO_MODE_OUTPUT,
+    };
+    gpio_config(&io);
+    gpio_set_level(NRF_PWR_EN_PIN, 0);
+    vTaskDelay(pdMS_TO_TICKS(300));
+    gpio_set_level(NRF_PWR_EN_PIN, 1);
+    vTaskDelay(pdMS_TO_TICKS(500));
+}
+#endif
 
 static void add_link(radar_t *r, int tx, int rx, const char *name, uint8_t tag)
 {
@@ -27,6 +46,15 @@ static void add_link(radar_t *r, int tx, int rx, const char *name, uint8_t tag)
     snprintf(r->view.link[l].name, sizeof(r->view.link[l].name), "%s", name);
     r->view.link[l].active = true;
     r->view.link[l].quality = 100;
+}
+
+static void rebuild_links(radar_t *r)
+{
+    r->view.nlinks = 0;
+    memset(r->view.link, 0, sizeof(r->view.link));
+    if (r->present[0] && r->present[1]) add_link(r, 0, 1, "AB", 0xA1);
+    if (r->present[0] && r->present[2]) add_link(r, 0, 2, "AC", 0xA2);
+    if (r->present[1] && r->present[2]) add_link(r, 1, 2, "BC", 0xA3);
 }
 
 /* RPD is a 1-bit carrier detector (~-64 dBm).  Sampling its duty cycle over
@@ -63,23 +91,24 @@ void radar_init(radar_t *r)
     /* Bulk capacitors and a separate supply take time to settle.  Probe
      * A, B and C one after another with a gap so their inrush current and
      * power-up reset do not overlap. */
+#if NRF_PWR_EN_PIN >= 0
+    nrf_power_cycle();
+#endif
     vTaskDelay(pdMS_TO_TICKS(RADAR_SETTLE_MS));
 
     const int csn[3] = NRF_CSN_PINS;
     const int ce[3] = NRF_CE_PINS;
     for (int i = 0; i < 3; i++) {
         ESP_LOGI(TAG, "probing module %c (CSN %d)", 'A' + i, csn[i]);
-        for (int attempt = 0; attempt < 5 && !r->present[i]; attempt++) {
+        for (int attempt = 0; attempt < RADAR_PROBE_TRIES && !r->present[i]; attempt++) {
             r->present[i] = nrf_init(&r->nrf[i], csn[i], ce[i]);
-            if (!r->present[i]) vTaskDelay(pdMS_TO_TICKS(200));
+            if (!r->present[i]) vTaskDelay(pdMS_TO_TICKS(RADAR_PROBE_RETRY_MS));
         }
         if (r->present[i]) r->view.modules |= 1u << i;
         if (i < 2) vTaskDelay(pdMS_TO_TICKS(RADAR_PROBE_GAP_MS));
     }
 
-    if (r->present[0] && r->present[1]) add_link(r, 0, 1, "AB", 0xA1);
-    if (r->present[0] && r->present[2]) add_link(r, 0, 2, "AC", 0xA2);
-    if (r->present[1] && r->present[2]) add_link(r, 1, 2, "BC", 0xA3);
+    rebuild_links(r);
 
     for (int i = 0; i < 3; i++)
         if (r->present[i]) nrf_set_channel(&r->nrf[i], r->channel);
@@ -109,8 +138,40 @@ void radar_calibrate(radar_t *r)
     memset(r->cal_retry, 0, sizeof(r->cal_retry));
 }
 
+/* A module can come up late or a breadboard contact can be fixed while the
+ * device runs.  Probe absent slots every few seconds and rebuild links. */
+static void radar_rescan(radar_t *r)
+{
+    bool changed = false;
+    const int csn[3] = NRF_CSN_PINS;
+    const int ce[3] = NRF_CE_PINS;
+
+    for (int i = 0; i < 3; i++) {
+        if (r->present[i]) continue;
+        if (nrf_init(&r->nrf[i], csn[i], ce[i])) {
+            r->present[i] = true;
+            r->view.modules |= 1u << i;
+            nrf_set_channel(&r->nrf[i], r->channel);
+            changed = true;
+            ESP_LOGI(TAG, "hot-plug module %c", 'A' + i);
+        }
+    }
+
+    if (changed) {
+        rebuild_links(r);
+        radar_calibrate(r);
+    }
+}
+
 void radar_step(radar_t *r)
 {
+    static int64_t last_scan;
+    int64_t now = esp_timer_get_time();
+    if (now - last_scan > 5000000) {
+        last_scan = now;
+        radar_rescan(r);
+    }
+
     if (r->view.paused) return;
 
     /* With a single module there is no link yet, but RPD still gives a
@@ -153,10 +214,6 @@ void radar_step(radar_t *r)
 
         nrf_standby(txr);
         nrf_standby(rxr);
-
-        if (l == 0) {
-            ESP_LOGI(TAG, "AB got %u/%u retries %u", got, RADAR_PACKETS, retries);
-        }
 
         unsigned loss = (RADAR_PACKETS - got) * 100u / RADAR_PACKETS;
         r->view.link[l].loss_pct = loss;

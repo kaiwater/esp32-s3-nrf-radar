@@ -11,6 +11,10 @@
 #define NRF_MOSI_PIN  15
 #define NRF_MISO_PIN  16
 
+/* Set to a free GPIO if the NRF 3.3V rail goes through a P-MOSFET/load
+ * switch.  -1 means the modules are powered directly. */
+#define NRF_PWR_EN_PIN (-1)
+
 #define NRF_MODULE_COUNT 3
 #define NRF_CSN_PINS {17, 18, 21}
 #define NRF_CE_PINS  {38, 39, 40}

@@ -48,10 +48,18 @@ static void cmd1(nrf_t *n, uint8_t cmd)
     xfer(n, &cmd, NULL, 1);
 }
 
-static void write_buf(nrf_t *n, uint8_t reg, const uint8_t *data, size_t len)
+static void write_reg_buf(nrf_t *n, uint8_t reg, const uint8_t *data, size_t len)
 {
     uint8_t tx[40];
     tx[0] = (uint8_t)(0x20 | (reg & 0x1F));
+    memcpy(&tx[1], data, len);
+    xfer(n, tx, NULL, len + 1);
+}
+
+static void write_cmd_buf(nrf_t *n, uint8_t cmd, const uint8_t *data, size_t len)
+{
+    uint8_t tx[40];
+    tx[0] = cmd;
     memcpy(&tx[1], data, len);
     xfer(n, tx, NULL, len + 1);
 }
@@ -165,8 +173,8 @@ void nrf_set_channel(nrf_t *n, uint8_t channel)
 void nrf_set_address(nrf_t *n, const uint8_t addr[5])
 {
     if (!n->present) return;
-    write_buf(n, REG_TX_ADDR, addr, 5);
-    write_buf(n, REG_RX_ADDR_P0, addr, 5);
+    write_reg_buf(n, REG_TX_ADDR, addr, 5);
+    write_reg_buf(n, REG_RX_ADDR_P0, addr, 5);
 }
 
 void nrf_tx_mode(nrf_t *n)
@@ -197,7 +205,7 @@ bool nrf_send(nrf_t *n, const uint8_t *payload, size_t len, uint8_t *observe)
     if (!n->present || len == 0 || len > 32) return false;
 
     gpio_set_level(n->ce_pin, 0);
-    write_buf(n, CMD_W_TX_PAYLOAD, payload, len);
+    write_cmd_buf(n, CMD_W_TX_PAYLOAD, payload, len);
     gpio_set_level(n->ce_pin, 1);
     esp_rom_delay_us(20);
     gpio_set_level(n->ce_pin, 0);

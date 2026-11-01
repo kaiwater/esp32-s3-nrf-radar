@@ -353,7 +353,8 @@ void st7735_draw_radar(const radar_view_t *v)
                 sc = c->accent;
             }
             text3x5(4, STATUS_Y, st, 1, sc);
-            text3x5(128, STATUS_Y, th, 1, c->dim);
+            text3x5(128, STATUS_Y, (v->modules == 0 && !v->booting) ? "K4 RST" : th,
+                    1, c->dim);
         }
 
         for (int i = 0; i < 3; i++) {

@@ -2,6 +2,7 @@
 #include "st7735.h"
 
 #include "esp_timer.h"
+#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -31,6 +32,9 @@ static void radar_task(void *arg)
         } else if (b == 13) {
             /* Long K3: next colour theme. */
             st7735_next_theme();
+        } else if (b == 14) {
+            /* Long K4: full ESP32 reboot when a module is not responding. */
+            esp_restart();
         }
 
         int64_t now = esp_timer_get_time();
