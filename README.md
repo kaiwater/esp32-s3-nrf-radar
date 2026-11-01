@@ -5,11 +5,11 @@
 
 ## 2.4G 探测器模式
 
-- 扫 **2400–2482MHz**，1MHz 步进，共 83 个信道
+- 扫 **2400–2525MHz**，1MHz 步进，共 126 个信道（NRF 的 0–125；下限 2400 是硬件极限）
 - 每个信道采样 NRF 的 `RPD`（8 次），得到 0–100% 占用
 - A+B 双模块分工扫，约 0.27 秒一帧
 - 40KB 全屏帧缓冲，一次刷屏，不再分 16 条带
-- 顶部 80 列占用柱，底部 7 行瀑布
+- 顶部 160 列占用柱，底部 21 行瀑布（2px/行）
 - `PEAK` 显示当前最强信道和数值
 - K3 采一次安静环境的基线，之后显示相对基线的正偏差（`DELTA`）
 - `RPD` 是 1-bit、约 -64dBm 门限，**不是 dBm，也不是频谱仪**
@@ -125,16 +125,16 @@ idf.py -B build -p /dev/cu.usbserial-XXXX flash
 
 | 编号 | 名称 | 来源 |
 |---|---|---|
-| T1 | PHO | 荧光绿 CRT |
-| T2 | AMB | 琥珀 CRT |
-| T3 | ICE | 冰蓝 CRT |
-| T4 | DRA | Dracula |
-| T5 | NRD | Nord |
-| T6 | GRU | Gruvbox |
-| T7 | SOL | Solarized Dark |
-| T8 | TOK | Tokyo Night |
-| T9 | CAT | Catppuccin Mocha |
-| T10 | MON | Monokai |
+| T1 | AMB | 琥珀 CRT（默认） |
+| T2 | ICE | 冰蓝 CRT |
+| T3 | PHO | 荧光绿 CRT |
+| T4 | MAG | 品红/霓虹 |
+| T5 | SOL | Solarized 暖色 |
+| T6 | DRA | Dracula 粉 |
+| T7 | NRD | Nord 冰蓝 |
+| T8 | GRU | Gruvbox 橙 |
+| T9 | TOK | Tokyo Night 紫 |
+| T10 | MON | 单色白 |
 
 ## 指标
 

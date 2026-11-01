@@ -56,16 +56,16 @@ typedef struct {
 
 /* Ten well-known editor/terminal palettes plus phosphor/amber/ice CRT. */
 static const ui_theme_t s_themes[] = {
-    {"PHO", RGB565(0x00, 0x00, 0x00), RGB565(0xCC, 0xFF, 0xDD), RGB565(0x33, 0xFF, 0x66), RGB565(0x1E, 0x8A, 0x46), RGB565(0x06, 0x2A, 0x14)},
-    {"AMB", RGB565(0x00, 0x00, 0x00), RGB565(0xFF, 0xE0, 0xB0), RGB565(0xFF, 0xB0, 0x00), RGB565(0x8A, 0x5A, 0x00), RGB565(0x2A, 0x1A, 0x00)},
-    {"ICE", RGB565(0x00, 0x00, 0x00), RGB565(0xD8, 0xF4, 0xFF), RGB565(0x4F, 0xD8, 0xFF), RGB565(0x2A, 0x7A, 0x9A), RGB565(0x06, 0x2A, 0x3A)},
-    {"DRA", RGB565(0x28, 0x2A, 0x36), RGB565(0xF8, 0xF8, 0xF2), RGB565(0xBD, 0x93, 0xF9), RGB565(0x62, 0x72, 0xA4), RGB565(0x44, 0x47, 0x5A)},
+    {"AMB", RGB565(0x00, 0x00, 0x00), RGB565(0xFF, 0xE6, 0xC0), RGB565(0xFF, 0xB0, 0x00), RGB565(0x7A, 0x4A, 0x00), RGB565(0x24, 0x14, 0x00)},
+    {"ICE", RGB565(0x00, 0x00, 0x00), RGB565(0xE0, 0xF8, 0xFF), RGB565(0x38, 0xD8, 0xFF), RGB565(0x1E, 0x6E, 0x8A), RGB565(0x04, 0x22, 0x2E)},
+    {"PHO", RGB565(0x00, 0x00, 0x00), RGB565(0xD8, 0xFF, 0xE4), RGB565(0x38, 0xFF, 0x78), RGB565(0x18, 0x7A, 0x3C), RGB565(0x04, 0x24, 0x14)},
+    {"MAG", RGB565(0x0A, 0x00, 0x10), RGB565(0xFF, 0xE0, 0xF4), RGB565(0xFF, 0x4F, 0xD8), RGB565(0x8A, 0x1E, 0x78), RGB565(0x2A, 0x00, 0x24)},
+    {"SOL", RGB565(0x00, 0x2B, 0x36), RGB565(0xF2, 0xE8, 0xC9), RGB565(0xE0, 0xA0, 0x00), RGB565(0x6A, 0x6A, 0x50), RGB565(0x07, 0x36, 0x42)},
+    {"DRA", RGB565(0x28, 0x2A, 0x36), RGB565(0xF8, 0xF8, 0xF2), RGB565(0xFF, 0x79, 0xC6), RGB565(0x62, 0x72, 0xA4), RGB565(0x44, 0x47, 0x5A)},
     {"NRD", RGB565(0x2E, 0x34, 0x40), RGB565(0xEC, 0xEF, 0xF4), RGB565(0x88, 0xC0, 0xD0), RGB565(0x4C, 0x56, 0x6A), RGB565(0x3B, 0x42, 0x52)},
-    {"GRU", RGB565(0x28, 0x28, 0x28), RGB565(0xEB, 0xDB, 0xB2), RGB565(0xFA, 0xBD, 0x2F), RGB565(0x92, 0x83, 0x74), RGB565(0x3C, 0x38, 0x36)},
-    {"SOL", RGB565(0x00, 0x2B, 0x36), RGB565(0xEE, 0xE8, 0xD5), RGB565(0x2A, 0xA1, 0x98), RGB565(0x58, 0x6E, 0x75), RGB565(0x07, 0x36, 0x42)},
-    {"TOK", RGB565(0x1A, 0x1B, 0x26), RGB565(0xC0, 0xCA, 0xF5), RGB565(0x7A, 0xA2, 0xF7), RGB565(0x56, 0x5F, 0x89), RGB565(0x24, 0x28, 0x3B)},
-    {"CAT", RGB565(0x1E, 0x1E, 0x2E), RGB565(0xCD, 0xD6, 0xF4), RGB565(0xF5, 0xC2, 0xE7), RGB565(0x6C, 0x70, 0x86), RGB565(0x31, 0x32, 0x44)},
-    {"MON", RGB565(0x27, 0x28, 0x22), RGB565(0xF8, 0xF8, 0xF2), RGB565(0xA6, 0xE2, 0x2E), RGB565(0x75, 0x71, 0x5E), RGB565(0x3E, 0x3D, 0x32)},
+    {"GRU", RGB565(0x28, 0x28, 0x28), RGB565(0xEB, 0xDB, 0xB2), RGB565(0xFE, 0x80, 0x19), RGB565(0x92, 0x83, 0x74), RGB565(0x3C, 0x38, 0x36)},
+    {"TOK", RGB565(0x1A, 0x1B, 0x26), RGB565(0xC0, 0xCA, 0xF5), RGB565(0xBB, 0x9A, 0xF7), RGB565(0x56, 0x5F, 0x89), RGB565(0x24, 0x28, 0x3B)},
+    {"MON", RGB565(0x00, 0x00, 0x00), RGB565(0xFF, 0xFF, 0xFF), RGB565(0xC0, 0xC0, 0xC0), RGB565(0x60, 0x60, 0x60), RGB565(0x20, 0x20, 0x20)},
 };
 #define THEME_COUNT (sizeof(s_themes) / sizeof(s_themes[0]))
 
@@ -77,7 +77,7 @@ static uint16_t *s_fb;
 static int s_fb_y;
 static uint8_t s_hist[3][HIST_W];
 static uint16_t s_heat[256];
-static unsigned s_theme = 1;  /* T2 AMBER default */
+static unsigned s_theme = 0;  /* T1 AMBER default */
 
 static const uint8_t s_font8[64][8] = {
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, /*   */
@@ -442,10 +442,15 @@ void st7735_draw_scan(const scan_view_t *v)
 
     clear_strip();
 
-    text8(4, 1, "2.4G", 1, c->accent);
-    text8(44, 1, "SCAN", 1, c->text);
-    text3x5(136, 2, "0-82", 1, c->dim);
+    /* Thin working-area header, normal 3x5 weight. */
+    text3x5(4, 1, "2.4G", 2, c->accent);
+    text3x5(40, 1, "SCAN", 2, c->text);
+    text3x5(136, 2, "0-125", 1, c->dim);
+    char th[12];
+    snprintf(th, sizeof(th), "T%u %s", s_theme + 1, c->abbr);
+    text3x5(104, 2, th, 1, c->accent);
 
+    /* Occupancy bars: 160 columns, 1 px each; upper area is 1/3 shorter. */
     for (int x = 0; x < SCAN_COLS; x++) {
         unsigned ch = x * (SCAN_CHANNELS - 1) / (SCAN_COLS - 1);
         int val = (v->delta_mode && v->have_baseline)
@@ -453,21 +458,15 @@ void st7735_draw_scan(const scan_view_t *v)
                       : v->duty[ch];
         if (val < 0) val = 0;
         if (val > 100) val = 100;
-        int h = val * 54 / 100;
+        int h = val * 35 / 100;
         uint16_t col = s_heat[val * 255 / 100];
-        for (int y = 66 - h; y <= 66; y++) {
-            px(x * 2, y, col);
-            px(x * 2 + 1, y, col);
-        }
+        for (int y = 47 - h; y <= 47; y++) px(x, y, col);
     }
-    for (int x = 0; x < WIDTH; x++) px(x, 67, c->dim);
+    for (int x = 0; x < WIDTH; x++) px(x, 48, c->dim);
 
     if (v->cursor_on) {
         int cx = (int)v->cursor_ch * (SCAN_COLS - 1) / (SCAN_CHANNELS - 1);
-        for (int y = 12; y <= 66; y++) {
-            px(cx * 2, y, c->text);
-            px(cx * 2 + 1, y, c->text);
-        }
+        for (int y = 12; y <= 47; y++) px(cx, y, c->text);
     }
 
     char s[32];
@@ -476,15 +475,15 @@ void st7735_draw_scan(const scan_view_t *v)
         snprintf(s, sizeof(s), "PEAK %d %+d", freq, v->peak_val);
     else
         snprintf(s, sizeof(s), "PEAK %d %d%%", freq, v->peak_val);
-    text8(4, 70, s, 1, c->text);
-    text3x5(140, 72, v->delta_mode ? "DLT" : "ABS", 1, c->accent);
+    text3x5(4, 51, s, 1, c->text);
+    text3x5(140, 51, v->delta_mode ? "DLT" : "ABS", 1, c->accent);
 
     if (v->booting) {
-        text8(4, 79, "BOOTING", 1, c->text);
+        text3x5(4, 57, "BOOTING", 1, c->text);
     } else if (!v->radio_ok) {
-        text8(4, 79, "NO NRF", 1, c->dim);
+        text3x5(4, 57, "NO NRF", 1, c->dim);
     } else if (v->paused) {
-        text8(4, 79, "PAUSED", 1, c->dim);
+        text3x5(4, 57, "PAUSED", 1, c->dim);
     } else if (v->cursor_on) {
         int cf = 2400 + (int)v->cursor_ch;
         int val = (v->delta_mode && v->have_baseline)
@@ -494,22 +493,21 @@ void st7735_draw_scan(const scan_view_t *v)
             snprintf(s, sizeof(s), "CUR %d %+d", cf, val);
         else
             snprintf(s, sizeof(s), "CUR %d %d%%", cf, val);
-        text8(4, 79, s, 1, c->text);
+        text3x5(4, 57, s, 1, c->text);
     } else {
         snprintf(s, sizeof(s), "SCAN %u", v->scans);
-        text8(4, 79, s, 1, c->dim);
+        text3x5(4, 57, s, 1, c->dim);
     }
-    text3x5(104, 81, v->have_baseline ? "BASE" : "NOBASE", 1, c->dim);
-    if (!v->radio_ok && !v->booting) text3x5(136, 81, "K4 RST", 1, c->dim);
+    text3x5(112, 59, v->have_baseline ? "BASE" : "NOBASE", 1, c->dim);
+    if (!v->radio_ok && !v->booting) text3x5(136, 59, "K4 RST", 1, c->dim);
 
+    /* 160 x 21 waterfall, newest row at the top. */
     for (int r = 0; r < SCAN_ROWS; r++) {
-        int y = 87 + r * 6;
+        int y = 64 + r * 3;
         for (int x = 0; x < SCAN_COLS; x++) {
             uint16_t col = s_heat[v->wf[r][x]];
-            for (int k = 0; k < 5; k++) {
-                px(x * 2, y + k, col);
-                px(x * 2 + 1, y + k, col);
-            }
+            px(x, y, col);
+            px(x, y + 1, col);
         }
     }
 

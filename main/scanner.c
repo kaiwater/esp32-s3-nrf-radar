@@ -25,7 +25,7 @@ static uint8_t s_duty[SCAN_CHANNELS];
 static uint8_t s_base[SCAN_CHANNELS];
 static uint8_t s_wf[SCAN_ROWS][SCAN_COLS];
 
-#define PAIR_COUNT 42u   /* A: 0..41, B: 42..82 */
+#define PAIR_COUNT 63u   /* A: 0..62, B: 63..125 */
 
 static void scan_pair(unsigned i)
 {

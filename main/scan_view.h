@@ -3,9 +3,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define SCAN_CHANNELS 83
-#define SCAN_COLS 80
-#define SCAN_ROWS 7
+#define SCAN_CHANNELS 126
+#define SCAN_COLS 160
+#define SCAN_ROWS 21
 
 typedef struct {
     uint8_t duty[SCAN_CHANNELS];   /* 0..100 RPD busy per 1 MHz channel */
