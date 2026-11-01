@@ -22,7 +22,8 @@ typedef struct {
     unsigned long rx;    /* packets received */
     unsigned long fail;  /* packets lost */
     unsigned long retry; /* retries */
-    unsigned noise;      /* RPD busy ratio, 0..100 (relative, not dBm) */
+    unsigned link_pct;   /* successful RX / TX, 0..100 */
+    unsigned rf_energy;  /* RPD busy ratio, 0..100 (relative, not dBm) */
 
     bool motion;
     bool paused;

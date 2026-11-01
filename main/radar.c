@@ -52,9 +52,8 @@ static void rebuild_links(radar_t *r)
 {
     r->view.nlinks = 0;
     memset(r->view.link, 0, sizeof(r->view.link));
+    /* Two-module build: only the AB link is exposed in the UI. */
     if (r->present[0] && r->present[1]) add_link(r, 0, 1, "AB", 0xA1);
-    if (r->present[0] && r->present[2]) add_link(r, 0, 2, "AC", 0xA2);
-    if (r->present[1] && r->present[2]) add_link(r, 1, 2, "BC", 0xA3);
 }
 
 /* RPD is a 1-bit carrier detector (~-64 dBm).  Sampling its duty cycle over
@@ -132,7 +131,8 @@ void radar_calibrate(radar_t *r)
     r->view.calibrating = true;
     r->view.motion = false;
     r->view.tx = r->view.rx = r->view.fail = r->view.retry = 0;
-    r->view.noise = 0;
+    r->view.rf_energy = 0;
+    r->view.link_pct = 0;
     r->cal_frames = 0;
     memset(r->cal_loss, 0, sizeof(r->cal_loss));
     memset(r->cal_retry, 0, sizeof(r->cal_retry));
@@ -177,7 +177,7 @@ void radar_step(radar_t *r)
     /* With a single module there is no link yet, but RPD still gives a
      * useful busy/noise number so the module can be checked on its own. */
     if (r->view.nlinks == 0) {
-        r->view.noise = sample_noise(r);
+        r->view.rf_energy = sample_noise(r);
         return;
     }
 
@@ -253,7 +253,7 @@ void radar_step(radar_t *r)
     r->view.rx += rx;
     r->view.fail += fail;
     r->view.retry += retry;
-    r->view.noise = sample_noise(r);
+    r->view.rf_energy = sample_noise(r);
 
     if (r->view.calibrating) {
         r->cal_frames++;
@@ -274,7 +274,7 @@ void radar_step(radar_t *r)
     if ((++log_div % 10) == 0) {
         ESP_LOGI(TAG, "TX%lu RX%lu F%lu R%lu N%u | AB L%u R%u%s",
                  r->view.tx, r->view.rx, r->view.fail, r->view.retry,
-                 r->view.noise, r->view.link[0].loss_pct,
+                 r->view.rf_energy, r->view.link[0].loss_pct,
                  r->view.link[0].retries, any ? " MOTION" : "");
     }
 }

@@ -37,14 +37,13 @@
 
 #define STATUS_Y 18
 #define LINK_Y 24
-#define LINK_STEP 16
-#define HIST_Y 100
+#define STATS1_Y 44
+#define STATS2_Y 54
+#define STATS3_Y 64
+#define HIST_Y 82
 #define HIST_X0 28
 #define HIST_W (WIDTH - HIST_X0)
-#define HIST_STEP 9
-#define STATS1_Y 68
-#define STATS2_Y 78
-#define STATS3_Y 88
+#define HIST_STEP 14
 
 #define BTN_LONG_MS 700
 
@@ -77,7 +76,8 @@ static SemaphoreHandle_t s_flush_done;
 static uint16_t *s_strip;
 static int s_strip_y;
 static uint8_t s_hist[3][HIST_W];
-static unsigned s_theme = 2;  /* T3 ICE default */
+static uint16_t s_heat[256];
+static unsigned s_theme = 1;  /* T2 AMBER default */
 
 static const uint8_t s_font8[64][8] = {
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, /*   */
@@ -218,6 +218,47 @@ static void clear_strip(void)
     for (int i = 0; i < STRIP_PIXELS / 2; i++) p[i] = pair;
 }
 
+static uint16_t mix565(uint16_t a, uint16_t b, unsigned num, unsigned den)
+{
+    int ar = (a >> 11) & 31, ag = (a >> 5) & 63, ab = a & 31;
+    int br = (b >> 11) & 31, bg = (b >> 5) & 63, bb = b & 31;
+    int r = ar + ((br - ar) * (int)num) / (int)den;
+    int g = ag + ((bg - ag) * (int)num) / (int)den;
+    int bl = ab + ((bb - ab) * (int)num) / (int)den;
+    return (uint16_t)((r << 11) | (g << 5) | bl);
+}
+
+typedef struct {
+    uint8_t at;
+    uint16_t color;
+} heat_stop_t;
+
+static uint16_t heat_ramp(const heat_stop_t *s, int n, unsigned v)
+{
+    if (v <= s[0].at) return s[0].color;
+    for (int i = 1; i < n; i++) {
+        if (v <= s[i].at) {
+            unsigned span = s[i].at - s[i - 1].at;
+            return mix565(s[i - 1].color, s[i].color, v - s[i - 1].at, span);
+        }
+    }
+    return s[n - 1].color;
+}
+
+static void build_heat(void)
+{
+    /* Warm waterfall: near-black brown -> deep red -> orange -> amber -> cream. */
+    static const heat_stop_t stops[] = {
+        {0, RGB565(0x10, 0x04, 0x00)},
+        {40, RGB565(0x5A, 0x10, 0x00)},
+        {90, RGB565(0xB0, 0x28, 0x00)},
+        {140, RGB565(0xF0, 0x70, 0x00)},
+        {200, RGB565(0xFF, 0xC0, 0x30)},
+        {255, RGB565(0xFF, 0xF4, 0xD0)},
+    };
+    for (unsigned v = 0; v < 256; v++) s_heat[v] = heat_ramp(stops, 6, v);
+}
+
 static bool on_color_done(esp_lcd_panel_io_handle_t io, esp_lcd_panel_io_event_data_t *edata, void *ctx)
 {
     (void)io;
@@ -289,6 +330,7 @@ void st7735_init(void)
     }
     memset(s_strip, 0, STRIP_PIXELS * sizeof(uint16_t));
     memset(s_hist, 0, sizeof(s_hist));
+    build_heat();
 
     const gpio_config_t btn = {
         .pin_bit_mask = (1ULL << PIN_BTN_UP) | (1ULL << PIN_BTN_DOWN) |
@@ -304,17 +346,14 @@ void st7735_draw_radar(const radar_view_t *v)
 {
     if (!s_panel || !s_strip || !v) return;
     const ui_theme_t *c = &s_themes[s_theme];
+    bool ab = v->nlinks > 0 && v->link[0].active;
 
     for (int i = 0; i < 3; i++) {
         memmove(&s_hist[i][0], &s_hist[i][1], HIST_W - 1);
         unsigned val = 0;
-        if (i < (int)v->nlinks && v->link[i].active) {
-            val = v->link[i].score;
-        } else if (i == (int)v->nlinks && v->nlinks < 3) {
-            val = v->noise * 2;                 /* spare row: RPD noise */
-        } else if (i == (int)v->nlinks + 1 && v->nlinks < 2) {
-            val = v->motion ? 255 : 0;          /* spare row: motion events */
-        }
+        if (i == 0 && ab) val = v->link[0].score;
+        else if (i == 1) val = v->rf_energy * 2;
+        else if (i == 2) val = v->motion ? 255 : 0;
         if (val > 255) val = 255;
         s_hist[i][HIST_W - 1] = (uint8_t)val;
     }
@@ -335,19 +374,16 @@ void st7735_draw_radar(const radar_view_t *v)
         if (y0 + STRIP_H > STATUS_Y && y0 <= STATUS_Y + 5) {
             const char *st = "CLEAR";
             uint16_t sc = c->accent;
-            char m[20];
             if (v->booting) {
                 st = "BOOTING";
                 sc = c->text;
             } else if (v->nlinks == 0) {
-                if (v->modules == 0) {
-                    st = "NO NRF";
-                    sc = c->dim;
-                } else {
-                    const char *name = (v->modules & 1) ? "A" : (v->modules & 2) ? "B" : "C";
-                    snprintf(m, sizeof(m), "%s OK NEED 2", name);
-                    st = m;
-                }
+                sc = c->dim;
+                if (v->modules == 0) st = "NO NRF";
+                else if (!(v->modules & 1) && (v->modules & 2)) st = "B OK NEED A";
+                else if ((v->modules & 1) && !(v->modules & 2)) st = "A OK NEED B";
+                else if (v->modules & 4) st = "C ONLY";
+                else st = "NO LINK";
             } else if (v->paused) {
                 st = "PAUSED";
                 sc = c->dim;
@@ -356,59 +392,29 @@ void st7735_draw_radar(const radar_view_t *v)
                 sc = c->text;
             } else if (v->motion) {
                 st = "MOTION";
-                sc = c->accent;
             }
             text3x5(4, STATUS_Y, st, 1, sc);
             text3x5(128, STATUS_Y, (v->modules == 0 && !v->booting) ? "K4 RST" : th,
                     1, c->dim);
         }
 
-        for (int i = 0; i < 3; i++) {
-            int y = LINK_Y + i * LINK_STEP;
-            if (y >= y0 + STRIP_H || y + 12 <= y0) continue;
-            if (i < (int)v->nlinks && v->link[i].active) {
-                text8(4, y, v->link[i].name, 1, c->accent);
-                const int bx = 28, by = y + 1, bw = 88, bh = 8;
+        if (y0 < LINK_Y + 16 && y0 + STRIP_H > LINK_Y) {
+            if (ab) {
+                text8(4, LINK_Y, "AB", 2, c->accent);
+                const int bx = 44, by = LINK_Y + 3, bw = 88, bh = 10;
                 rect(bx, by, bw, bh, c->dark);
-                unsigned q = v->link[i].quality;
+                unsigned q = v->link[0].quality;
                 if (q > 100) q = 100;
                 rect(bx, by, (int)(bw * q / 100), bh, c->accent);
                 rect(bx, by, bw, 1, c->dim);
                 char t[16];
-                snprintf(t, sizeof(t), "L%u", v->link[i].loss_pct);
-                text3x5(120, y + 2, t, 1, c->dim);
-                snprintf(t, sizeof(t), "R%u", v->link[i].retries);
-                text3x5(140, y + 2, t, 1, c->dim);
+                snprintf(t, sizeof(t), "L%u", v->link[0].loss_pct);
+                text3x5(134, LINK_Y + 4, t, 1, c->dim);
+                snprintf(t, sizeof(t), "R%u", v->link[0].retries);
+                text3x5(152, LINK_Y + 4, t, 1, c->dim);
             } else {
-                text8(4, y, "--", 1, c->dim);
+                text8(4, LINK_Y, "--", 2, c->dim);
             }
-        }
-
-        for (int i = 0; i < 3; i++) {
-            int y = HIST_Y + i * HIST_STEP;
-            if (y >= y0 + STRIP_H || y + 7 <= y0) continue;
-            bool live = i < (int)v->nlinks && v->link[i].active;
-            const char *lname;
-            bool dynamic = false;
-            if (live) {
-                lname = v->link[i].name;
-            } else if (i == (int)v->nlinks && v->nlinks < 3) {
-                lname = "NOISE";
-                dynamic = true;
-            } else if (i == (int)v->nlinks + 1 && v->nlinks < 2) {
-                lname = "MOTION";
-                dynamic = true;
-            } else {
-                lname = i == 0 ? "AB" : i == 1 ? "AC" : "BC";
-            }
-            text3x5(2, y + 1, lname, 1, (live || dynamic) ? c->accent : c->dim);
-            for (int x = 0; x < HIST_W; x++) {
-                uint8_t val = s_hist[i][x];
-                uint16_t col = val < 8 ? c->dark : val < 40 ? c->dim : val < 110 ? c->accent : c->text;
-                for (int k = 0; k < 6; k++) px(HIST_X0 + x, y + k, col);
-            }
-            for (int x = HIST_X0; x < WIDTH; x++)
-                px(x, y + 6, (live || dynamic) ? c->dim : c->dark);
         }
 
         char s[40];
@@ -421,11 +427,24 @@ void st7735_draw_radar(const radar_view_t *v)
             text8(4, STATS2_Y, s, 1, c->text);
         }
         if (y0 + STRIP_H > STATS3_Y && y0 <= STATS3_Y + 8) {
-            text8(4, STATS3_Y, "NOISE", 1, c->accent);
-            snprintf(s, sizeof(s), "%u", v->noise);
-            text8(52, STATS3_Y, s, 1, c->text);
-            rect(80, STATS3_Y + 1, 76, 6, c->dark);
-            rect(80, STATS3_Y + 1, (int)(76 * v->noise / 100), 6, c->accent);
+            snprintf(s, sizeof(s), "LINK%u%% RF%u%%", v->link_pct, v->rf_energy);
+            text8(4, STATS3_Y, s, 1, c->text);
+            rect(128, STATS3_Y + 1, 28, 6, c->dark);
+            rect(128, STATS3_Y + 1, (int)(28 * v->rf_energy / 100), 6, c->accent);
+        }
+
+        for (int i = 0; i < 3; i++) {
+            int y = HIST_Y + i * HIST_STEP;
+            if (y >= y0 + STRIP_H || y + 9 <= y0) continue;
+            const char *lname = i == 0 ? "AB" : i == 1 ? "RF" : "MOTION";
+            bool live = (i == 0 && ab) || i > 0;
+            text3x5(2, y + 2, lname, 1, live ? c->accent : c->dim);
+            for (int x = 0; x < HIST_W; x++) {
+                uint16_t col = s_heat[s_hist[i][x]];
+                for (int k = 0; k < 8; k++) px(HIST_X0 + x, y + k, col);
+            }
+            for (int x = HIST_X0; x < WIDTH; x++)
+                px(x, y + 8, live ? c->dim : c->dark);
         }
 
         ESP_ERROR_CHECK(esp_lcd_panel_draw_bitmap(s_panel, 0, y0, WIDTH, y0 + STRIP_H, s_strip));
