@@ -123,6 +123,7 @@ void radar_set_channel(radar_t *r, uint8_t channel)
     r->view.channel = r->channel;
     for (int i = 0; i < 3; i++)
         if (r->present[i]) nrf_set_channel(&r->nrf[i], r->channel);
+    ESP_LOGI(TAG, "channel %u", r->channel);
     radar_calibrate(r);
 }
 

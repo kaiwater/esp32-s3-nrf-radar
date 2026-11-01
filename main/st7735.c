@@ -354,7 +354,7 @@ void st7735_draw_radar(const radar_view_t *v)
 
         if (y0 < STATUS_Y) {
             text8(4, 1, "RF SENSE", 2, c->text);
-            text3x5(136, 3, ch, 1, c->dim);
+            text3x5(136, 3, ch, 1, c->accent);
         }
 
         if (y0 + STRIP_H > STATUS_Y && y0 <= STATUS_Y + 5) {
@@ -413,16 +413,14 @@ void st7735_draw_radar(const radar_view_t *v)
             text8(4, STATS2_Y, s, 1, c->text);
         }
         if (y0 + STRIP_H > STATS3_Y && y0 <= STATS3_Y + 8) {
-            snprintf(s, sizeof(s), "LINK%u%% RF%u%%", v->link_pct, v->rf_energy);
+            snprintf(s, sizeof(s), "LINK%u%%  NOISE%u%%", v->link_pct, v->rf_energy);
             text8(4, STATS3_Y, s, 1, c->text);
-            rect(128, STATS3_Y + 1, 28, 6, c->dark);
-            rect(128, STATS3_Y + 1, (int)(28 * v->rf_energy / 100), 6, c->accent);
         }
 
         for (int i = 0; i < 3; i++) {
             int y = HIST_Y + i * HIST_STEP;
             if (y >= y0 + STRIP_H || y + 9 <= y0) continue;
-            const char *lname = i == 0 ? "AB" : i == 1 ? "RF" : "MOTION";
+            const char *lname = i == 0 ? "AB" : i == 1 ? "NOISE" : "MOTION";
             bool live = (i == 0 && ab) || i > 0;
             text3x5(2, y + 2, lname, 1, live ? c->accent : c->dim);
             for (int x = 0; x < HIST_W; x++) {
