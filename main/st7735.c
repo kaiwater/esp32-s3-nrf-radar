@@ -242,14 +242,15 @@ static void build_heat(void)
     /* Each theme uses its own dim -> accent -> text -> white ramp.  The
      * low end is dim, not the background, so the waterfall stays visible. */
     const ui_theme_t *c = &s_themes[s_theme];
-    /* Dark waterfall: background -> dim -> half-strength accent.
-     * Never mix up to text/white; the field stays low-glare. */
-    uint16_t dark_accent = mix565(c->accent, c->bg, 1, 2);
+    /* Dark background, bright signals: quiet pixels blend into the
+     * theme background, strong signals use dim -> accent -> text. */
     for (unsigned v = 0; v < 256; v++) {
-        if (v < 128) {
-            s_heat[v] = mix565(c->bg, c->dim, v, 128);
+        if (v < 64) {
+            s_heat[v] = mix565(c->bg, c->dim, v, 64);
+        } else if (v < 170) {
+            s_heat[v] = mix565(c->dim, c->accent, v - 64, 106);
         } else {
-            s_heat[v] = mix565(c->dim, dark_accent, v - 128, 127);
+            s_heat[v] = mix565(c->accent, c->text, v - 170, 85);
         }
     }
 }
