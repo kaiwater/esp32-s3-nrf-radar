@@ -8,6 +8,7 @@ typedef struct {
     unsigned loss_pct;   /* 0..100 */
     unsigned retries;    /* accumulated ARC_CNT over the burst */
     unsigned quality;    /* 100 - loss_pct */
+    unsigned score;      /* 0..255 history intensity (baseline deviation) */
 } radar_view_link_t;
 
 typedef struct {

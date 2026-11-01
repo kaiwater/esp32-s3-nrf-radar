@@ -39,6 +39,8 @@
 #define LINK_Y 24
 #define LINK_STEP 16
 #define HIST_Y 100
+#define HIST_X0 12
+#define HIST_W (WIDTH - HIST_X0)
 #define HIST_STEP 9
 #define STATS1_Y 68
 #define STATS2_Y 78
@@ -74,8 +76,8 @@ static esp_lcd_panel_io_handle_t s_io;
 static SemaphoreHandle_t s_flush_done;
 static uint16_t *s_strip;
 static int s_strip_y;
-static uint8_t s_hist[3][WIDTH];
-static unsigned s_theme;
+static uint8_t s_hist[3][HIST_W];
+static unsigned s_theme = 2;  /* T3 ICE default */
 
 static const uint8_t s_font8[64][8] = {
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, /*   */
@@ -304,13 +306,10 @@ void st7735_draw_radar(const radar_view_t *v)
     const ui_theme_t *c = &s_themes[s_theme];
 
     for (int i = 0; i < 3; i++) {
-        memmove(&s_hist[i][0], &s_hist[i][1], WIDTH - 1);
+        memmove(&s_hist[i][0], &s_hist[i][1], HIST_W - 1);
         unsigned val = 0;
-        if (i < (int)v->nlinks && v->link[i].active) {
-            val = v->link[i].loss_pct * 2 + v->link[i].retries;
-            if (val > 255) val = 255;
-        }
-        s_hist[i][WIDTH - 1] = (uint8_t)val;
+        if (i < (int)v->nlinks && v->link[i].active) val = v->link[i].score;
+        s_hist[i][HIST_W - 1] = (uint8_t)val;
     }
 
     char ch[8], th[12];
@@ -381,25 +380,32 @@ void st7735_draw_radar(const radar_view_t *v)
         for (int i = 0; i < 3; i++) {
             int y = HIST_Y + i * HIST_STEP;
             if (y >= y0 + STRIP_H || y + 7 <= y0) continue;
-            for (int x = 0; x < WIDTH; x++) {
+            const char *lname = i == 0 ? "AB" : i == 1 ? "AC" : "BC";
+            bool live = i < (int)v->nlinks && v->link[i].active;
+            text3x5(2, y + 1, lname, 1, live ? c->accent : c->dim);
+            for (int x = 0; x < HIST_W; x++) {
                 uint8_t val = s_hist[i][x];
-                uint16_t col = val < 24 ? c->dark : val < 80 ? c->dim : val < 160 ? c->accent : c->text;
-                for (int k = 0; k < 7; k++) px(x, y + k, col);
+                uint16_t col = val < 8 ? c->dark : val < 40 ? c->dim : val < 110 ? c->accent : c->text;
+                for (int k = 0; k < 6; k++) px(HIST_X0 + x, y + k, col);
             }
+            for (int x = HIST_X0; x < WIDTH; x++) px(x, y + 6, live ? c->dim : c->dark);
         }
 
         char s[40];
         if (y0 + STRIP_H > STATS1_Y && y0 <= STATS1_Y + 8) {
-            snprintf(s, sizeof(s), "TX%lu RX%lu", v->tx, v->rx);
+            snprintf(s, sizeof(s), "TX %lu  RX %lu", v->tx, v->rx);
             text8(4, STATS1_Y, s, 1, c->text);
         }
         if (y0 + STRIP_H > STATS2_Y && y0 <= STATS2_Y + 8) {
-            snprintf(s, sizeof(s), "FAIL%lu RETRY%lu", v->fail, v->retry);
+            snprintf(s, sizeof(s), "FAIL %lu  RETRY %lu", v->fail, v->retry);
             text8(4, STATS2_Y, s, 1, c->text);
         }
         if (y0 + STRIP_H > STATS3_Y && y0 <= STATS3_Y + 8) {
-            snprintf(s, sizeof(s), "NOISE%u", v->noise);
-            text8(4, STATS3_Y, s, 1, c->accent);
+            text8(4, STATS3_Y, "NOISE", 1, c->accent);
+            snprintf(s, sizeof(s), "%u", v->noise);
+            text8(52, STATS3_Y, s, 1, c->text);
+            rect(80, STATS3_Y + 1, 76, 6, c->dark);
+            rect(80, STATS3_Y + 1, (int)(76 * v->noise / 100), 6, c->accent);
         }
 
         ESP_ERROR_CHECK(esp_lcd_panel_draw_bitmap(s_panel, 0, y0, WIDTH, y0 + STRIP_H, s_strip));

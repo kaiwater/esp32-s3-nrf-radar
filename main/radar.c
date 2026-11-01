@@ -225,19 +225,28 @@ void radar_step(radar_t *r)
         fail += RADAR_PACKETS - got;
         retry += retries;
 
+        bool moved = false;
+        unsigned score = loss * 4 + retries * 40;
+
         if (r->view.calibrating) {
             r->cal_loss[l] += loss;
             r->cal_retry[l] += retries;
         } else {
-            bool moved = loss > r->base_loss[l] + 15 ||
-                         retries > r->base_retry[l] * 2 + 8;
+            moved = loss > r->base_loss[l] + 15 ||
+                    retries > r->base_retry[l] * 2 + 8;
+            unsigned dl = loss > r->base_loss[l] ? loss - r->base_loss[l] : 0;
+            unsigned dr = retries > r->base_retry[l] ? retries - r->base_retry[l] : 0;
+            score += dl * 10 + dr * 60;
             if (moved) {
+                score += 120;
                 any = true;
             } else {
                 r->base_loss[l] = (r->base_loss[l] * 7 + loss) / 8;
                 r->base_retry[l] = (r->base_retry[l] * 7 + retries) / 8;
             }
         }
+        if (score > 255) score = 255;
+        r->view.link[l].score = score;
     }
 
     r->view.tx += tx;
