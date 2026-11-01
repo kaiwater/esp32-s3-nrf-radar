@@ -39,7 +39,7 @@
 #define LINK_Y 24
 #define LINK_STEP 16
 #define HIST_Y 100
-#define HIST_X0 12
+#define HIST_X0 28
 #define HIST_W (WIDTH - HIST_X0)
 #define HIST_STEP 9
 #define STATS1_Y 68
@@ -308,7 +308,14 @@ void st7735_draw_radar(const radar_view_t *v)
     for (int i = 0; i < 3; i++) {
         memmove(&s_hist[i][0], &s_hist[i][1], HIST_W - 1);
         unsigned val = 0;
-        if (i < (int)v->nlinks && v->link[i].active) val = v->link[i].score;
+        if (i < (int)v->nlinks && v->link[i].active) {
+            val = v->link[i].score;
+        } else if (i == (int)v->nlinks && v->nlinks < 3) {
+            val = v->noise * 2;                 /* spare row: RPD noise */
+        } else if (i == (int)v->nlinks + 1 && v->nlinks < 2) {
+            val = v->motion ? 255 : 0;          /* spare row: motion events */
+        }
+        if (val > 255) val = 255;
         s_hist[i][HIST_W - 1] = (uint8_t)val;
     }
 
@@ -380,15 +387,28 @@ void st7735_draw_radar(const radar_view_t *v)
         for (int i = 0; i < 3; i++) {
             int y = HIST_Y + i * HIST_STEP;
             if (y >= y0 + STRIP_H || y + 7 <= y0) continue;
-            const char *lname = i == 0 ? "AB" : i == 1 ? "AC" : "BC";
             bool live = i < (int)v->nlinks && v->link[i].active;
-            text3x5(2, y + 1, lname, 1, live ? c->accent : c->dim);
+            const char *lname;
+            bool dynamic = false;
+            if (live) {
+                lname = v->link[i].name;
+            } else if (i == (int)v->nlinks && v->nlinks < 3) {
+                lname = "NOISE";
+                dynamic = true;
+            } else if (i == (int)v->nlinks + 1 && v->nlinks < 2) {
+                lname = "MOTION";
+                dynamic = true;
+            } else {
+                lname = i == 0 ? "AB" : i == 1 ? "AC" : "BC";
+            }
+            text3x5(2, y + 1, lname, 1, (live || dynamic) ? c->accent : c->dim);
             for (int x = 0; x < HIST_W; x++) {
                 uint8_t val = s_hist[i][x];
                 uint16_t col = val < 8 ? c->dark : val < 40 ? c->dim : val < 110 ? c->accent : c->text;
                 for (int k = 0; k < 6; k++) px(HIST_X0 + x, y + k, col);
             }
-            for (int x = HIST_X0; x < WIDTH; x++) px(x, y + 6, live ? c->dim : c->dark);
+            for (int x = HIST_X0; x < WIDTH; x++)
+                px(x, y + 6, (live || dynamic) ? c->dim : c->dark);
         }
 
         char s[40];
