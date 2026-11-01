@@ -445,13 +445,13 @@ void st7735_draw_scan(const scan_view_t *v)
         s_strip_y = y0;
         clear_strip();
 
-        if (y0 < 20) {
-            text8(4, 1, "2.4G", 2, c->text);
-            text8(72, 8, "SCAN", 1, c->accent);
-            text3x5(140, 3, "0-82", 1, c->dim);
+        if (y0 < 12) {
+            text8(4, 1, "2.4G", 1, c->accent);
+            text8(44, 1, "SCAN", 1, c->text);
+            text3x5(136, 2, "0-82", 1, c->dim);
         }
 
-        if (y0 < 66 && y0 + STRIP_H > 20) {
+        if (y0 < 68 && y0 + STRIP_H > 12) {
             for (int x = 0; x < SCAN_COLS; x++) {
                 unsigned ch = x * (SCAN_CHANNELS - 1) / (SCAN_COLS - 1);
                 int val = (v->delta_mode && v->have_baseline)
@@ -459,44 +459,44 @@ void st7735_draw_scan(const scan_view_t *v)
                               : v->duty[ch];
                 if (val < 0) val = 0;
                 if (val > 100) val = 100;
-                int h = val * 44 / 100;
+                int h = val * 54 / 100;
                 uint16_t col = s_heat[val * 255 / 100];
-                for (int y = 64 - h; y <= 64; y++) {
+                for (int y = 66 - h; y <= 66; y++) {
                     px(x * 2, y, col);
                     px(x * 2 + 1, y, col);
                 }
             }
-            for (int x = 0; x < WIDTH; x++) px(x, 65, c->dim);
+            for (int x = 0; x < WIDTH; x++) px(x, 67, c->dim);
         }
 
         char s[32];
-        if (y0 + STRIP_H > 68 && y0 <= 76) {
+        if (y0 + STRIP_H > 70 && y0 <= 78) {
             int freq = 2400 + (int)v->peak_ch;
             if (v->delta_mode && v->have_baseline)
                 snprintf(s, sizeof(s), "PEAK %d %+d", freq, v->peak_val);
             else
                 snprintf(s, sizeof(s), "PEAK %d %d%%", freq, v->peak_val);
-            text8(4, 68, s, 1, c->text);
-            text3x5(140, 70, v->delta_mode ? "DLT" : "ABS", 1, c->accent);
+            text8(4, 70, s, 1, c->text);
+            text3x5(140, 72, v->delta_mode ? "DLT" : "ABS", 1, c->accent);
         }
 
-        if (y0 + STRIP_H > 78 && y0 <= 86) {
+        if (y0 + STRIP_H > 79 && y0 <= 87) {
             if (v->booting) {
-                text8(4, 78, "BOOTING", 1, c->text);
+                text8(4, 79, "BOOTING", 1, c->text);
             } else if (!v->radio_ok) {
-                text8(4, 78, "NO NRF", 1, c->dim);
+                text8(4, 79, "NO NRF", 1, c->dim);
             } else if (v->paused) {
-                text8(4, 78, "PAUSED", 1, c->dim);
+                text8(4, 79, "PAUSED", 1, c->dim);
             } else {
                 snprintf(s, sizeof(s), "SCAN %u", v->scans);
-                text8(4, 78, s, 1, c->dim);
+                text8(4, 79, s, 1, c->dim);
             }
-            text3x5(100, 80, v->have_baseline ? "BASE" : "NOBASE", 1, c->dim);
-            if (!v->radio_ok && !v->booting) text3x5(136, 80, "K4 RST", 1, c->dim);
+            text3x5(100, 81, v->have_baseline ? "BASE" : "NOBASE", 1, c->dim);
+            if (!v->radio_ok && !v->booting) text3x5(136, 81, "K4 RST", 1, c->dim);
         }
 
         for (int r = 0; r < SCAN_ROWS; r++) {
-            int y = 86 + r * 6;
+            int y = 87 + r * 6;
             if (y >= y0 + STRIP_H || y + 5 <= y0) continue;
             for (int x = 0; x < SCAN_COLS; x++) {
                 uint16_t col = s_heat[v->wf[r][x]];
