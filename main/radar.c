@@ -11,6 +11,8 @@
 #define RADAR_PACKETS 16
 #define RADAR_CAL_FRAMES 20
 #define RADAR_CHANNEL 80
+#define RADAR_SETTLE_MS 800
+#define RADAR_PROBE_GAP_MS 400
 #define REG_RPD 0x09
 
 static const char *TAG = "radar";
@@ -58,18 +60,21 @@ void radar_init(radar_t *r)
         return;
     }
 
-    /* Bulk capacitors on a breadboard take a while to settle and the
-     * NRF24L01 needs ~100 ms after power-up.  Probe several times. */
-    vTaskDelay(pdMS_TO_TICKS(600));
+    /* Bulk capacitors and a separate supply take time to settle.  Probe
+     * A, B and C one after another with a gap so their inrush current and
+     * power-up reset do not overlap. */
+    vTaskDelay(pdMS_TO_TICKS(RADAR_SETTLE_MS));
 
     const int csn[3] = NRF_CSN_PINS;
     const int ce[3] = NRF_CE_PINS;
     for (int i = 0; i < 3; i++) {
+        ESP_LOGI(TAG, "probing module %c (CSN %d)", 'A' + i, csn[i]);
         for (int attempt = 0; attempt < 5 && !r->present[i]; attempt++) {
             r->present[i] = nrf_init(&r->nrf[i], csn[i], ce[i]);
             if (!r->present[i]) vTaskDelay(pdMS_TO_TICKS(200));
         }
         if (r->present[i]) r->view.modules |= 1u << i;
+        if (i < 2) vTaskDelay(pdMS_TO_TICKS(RADAR_PROBE_GAP_MS));
     }
 
     if (r->present[0] && r->present[1]) add_link(r, 0, 1, "AB", 0xA1);
