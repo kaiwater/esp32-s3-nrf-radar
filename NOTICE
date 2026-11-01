@@ -1,0 +1,17 @@
+ESP32-S3 + NRF24L01 RF link-quality sensor
+
+The ST7735 display/UI code is derived from:
+  https://github.com/kaiwater/esp32-s3-st7735-sdr
+  Licensed under GPL-3.0-or-later (see LICENSE).
+
+Bundled third-party component:
+
+  components/esp_lcd_st7735/
+    Waveshare ESP-LCD ST7735 component
+    Licensed under MIT (see components/esp_lcd_st7735/idf_component.yml).
+
+  8x8 pixel font in main/st7735.c
+    Derived from font8x8 (public domain, VGA-derived).
+    https://github.com/dhepper/font8x8
+
+This is an experimental RF motion sensor, not a ranging radar.
