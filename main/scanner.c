@@ -98,44 +98,6 @@ static int channel_value(const scan_view_t *v, unsigned ch)
     return val;
 }
 
-static void update_range(scan_view_t *v)
-{
-    int lo = SCAN_CHANNELS, hi = -1;
-    for (unsigned ch = 0; ch < SCAN_CHANNELS; ch++) {
-        int val = channel_value(v, ch);
-        if (val >= 6) {
-            if ((int)ch < lo) lo = (int)ch;
-            if ((int)ch > hi) hi = (int)ch;
-        }
-    }
-
-    if (hi < lo) {
-        lo = 0;
-        hi = SCAN_CHANNELS - 1;
-    } else {
-        lo -= 3;
-        hi += 3;
-        if (lo < 0) lo = 0;
-        if (hi >= SCAN_CHANNELS) hi = SCAN_CHANNELS - 1;
-        if (hi - lo < 12) {
-            int c = (lo + hi) / 2;
-            lo = c - 6;
-            hi = c + 6;
-            if (lo < 0) { lo = 0; hi = 12; }
-            if (hi >= SCAN_CHANNELS) { hi = SCAN_CHANNELS - 1; lo = hi - 12; }
-        }
-    }
-
-    static unsigned div;
-    if (++div % 3) return;
-    if ((unsigned)lo == v->disp_min && (unsigned)hi == v->disp_max) return;
-
-    v->disp_min = (unsigned)lo;
-    v->disp_max = (unsigned)hi;
-    memset(s_wf, 0, sizeof(s_wf));
-    memcpy(v->wf, s_wf, sizeof(s_wf));
-}
-
 bool scanner_init(void)
 {
     if (!nrf_bus_init()) return false;
@@ -209,12 +171,6 @@ void scanner_step(scan_view_t *v)
                            : 0;
     }
 
-    if (v->disp_max <= v->disp_min) {
-        v->disp_min = 0;
-        v->disp_max = SCAN_CHANNELS - 1;
-    }
-    update_range(v);
-
     v->peak_val = 0;
     v->peak_ch = 0;
     for (unsigned ch = 0; ch < SCAN_CHANNELS; ch++) {
@@ -227,11 +183,8 @@ void scanner_step(scan_view_t *v)
 
     /* Traditional SDR direction: newest row at the top, older rows scroll down. */
     memmove(&s_wf[1][0], &s_wf[0][0], (SCAN_ROWS - 1) * SCAN_COLS);
-    unsigned span = v->disp_max - v->disp_min;
-    if (!span) span = 1;
     for (unsigned x = 0; x < SCAN_COLS; x++) {
-        unsigned ch = v->disp_min + x * span / (SCAN_COLS - 1);
-        if (ch >= SCAN_CHANNELS) ch = SCAN_CHANNELS - 1;
+        unsigned ch = x * (SCAN_CHANNELS - 1) / (SCAN_COLS - 1);
         s_wf[0][x] = (uint8_t)(channel_value(v, ch) * 255 / 100);
     }
 
@@ -255,7 +208,7 @@ void scanner_calibrate(scan_view_t *v)
     memset(s_wf, 0, sizeof(s_wf));
     memcpy(v->wf, s_wf, sizeof(s_wf));
     v->scans = 0;
-    ESP_LOGI(TAG, "baseline captured");
+    ESP_LOGI(TAG, "baseline captured, fixed range 2400-2525");
 }
 
 void scanner_toggle_delta(scan_view_t *v)

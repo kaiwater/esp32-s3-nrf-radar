@@ -23,5 +23,4 @@ typedef struct {
     unsigned scans;
     unsigned cursor_ch;
     bool cursor_on;
-    unsigned disp_min, disp_max;
 } scan_view_t;

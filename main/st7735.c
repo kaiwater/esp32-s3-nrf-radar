@@ -457,16 +457,13 @@ void st7735_draw_scan(const scan_view_t *v)
     text3x5(40, 1, "SCAN", 2, c->text);
     char th[12], rng[32];
     snprintf(th, sizeof(th), "T%u %s", s_theme + 1, c->abbr);
-    snprintf(rng, sizeof(rng), "%d-%d", 2400 + (int)v->disp_min, 2400 + (int)v->disp_max);
+    snprintf(rng, sizeof(rng), "2400-2525");
     text3x5(80, 2, th, 1, c->accent);
     text3x5(120, 2, rng, 1, c->dim);
 
     /* Occupancy bars: 160 columns, 1 px each; upper area is 1/3 shorter. */
-    unsigned span = v->disp_max - v->disp_min;
-    if (!span) span = 1;
     for (int x = 0; x < SCAN_COLS; x++) {
-        unsigned ch = v->disp_min + (unsigned)x * span / (SCAN_COLS - 1);
-        if (ch >= SCAN_CHANNELS) ch = SCAN_CHANNELS - 1;
+        unsigned ch = (unsigned)x * (SCAN_CHANNELS - 1) / (SCAN_COLS - 1);
         int val = (v->delta_mode && v->have_baseline)
                       ? (v->delta[ch] > 0 ? v->delta[ch] : 0)
                       : v->duty[ch];
@@ -478,8 +475,8 @@ void st7735_draw_scan(const scan_view_t *v)
     }
     for (int x = 0; x < WIDTH; x++) px(x, 48, c->dim);
 
-    if (v->cursor_on && v->cursor_ch >= v->disp_min && v->cursor_ch <= v->disp_max) {
-        int cx = (int)(v->cursor_ch - v->disp_min) * (SCAN_COLS - 1) / (int)span;
+    if (v->cursor_on) {
+        int cx = (int)v->cursor_ch * (SCAN_COLS - 1) / (SCAN_CHANNELS - 1);
         for (int y = 12; y <= 47; y++) px(cx, y, c->text);
     }
 

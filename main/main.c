@@ -66,7 +66,6 @@ void app_main(void)
 
     static scan_view_t v;
     memset(&v, 0, sizeof(v));
-    v.disp_max = SCAN_CHANNELS - 1;
     v.booting = true;
     st7735_draw_scan(&v);
 
