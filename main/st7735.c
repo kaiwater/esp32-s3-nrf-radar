@@ -58,7 +58,7 @@ typedef struct {
 static const ui_theme_t s_themes[] = {
     {"AMB", RGB565(0x00,0x00,0x00), RGB565(0xFF,0xE6,0xC0), RGB565(0xFF,0xB0,0x00), RGB565(0x7A,0x4A,0x00), RGB565(0x24,0x14,0x00)},
     {"ICE", RGB565(0x00,0x00,0x00), RGB565(0xE0,0xF8,0xFF), RGB565(0x38,0xD8,0xFF), RGB565(0x1E,0x6E,0x8A), RGB565(0x04,0x22,0x2E)},
-    {"PHO", RGB565(0x00,0x00,0x00), RGB565(0xD8,0xFF,0xE4), RGB565(0x38,0xFF,0x78), RGB565(0x18,0x7A,0x3C), RGB565(0x04,0x24,0x14)},
+    {"PHO", RGB565(0x00,0x14,0x08), RGB565(0xD8,0xFF,0xE4), RGB565(0x38,0xFF,0x78), RGB565(0x18,0x7A,0x3C), RGB565(0x04,0x24,0x14)},
     {"MAG", RGB565(0x0A,0x00,0x10), RGB565(0xFF,0xE0,0xF4), RGB565(0xFF,0x4F,0xD8), RGB565(0x8A,0x1E,0x78), RGB565(0x2A,0x00,0x24)},
     {"SOL", RGB565(0x00,0x2B,0x36), RGB565(0xF2,0xE8,0xC9), RGB565(0xE0,0xA0,0x00), RGB565(0x6A,0x6A,0x50), RGB565(0x07,0x36,0x42)},
     {"DRA", RGB565(0x28,0x2A,0x36), RGB565(0xF8,0xF8,0xF2), RGB565(0xFF,0x79,0xC6), RGB565(0x62,0x72,0xA4), RGB565(0x44,0x47,0x5A)},
@@ -87,7 +87,7 @@ static uint16_t *s_fb;
 static int s_fb_y;
 static uint8_t s_hist[3][HIST_W];
 static uint16_t s_heat[256];
-static unsigned s_theme = 0;  /* T1 AMBER default */
+static unsigned s_theme = 2;  /* T3 PHO green default */
 
 static const uint8_t s_font8[64][8] = {
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, /*   */
@@ -461,6 +461,10 @@ void st7735_draw_scan(const scan_view_t *v)
     text3x5(80, 2, th, 1, c->accent);
     text3x5(120, 2, rng, 1, c->dim);
 
+    /* Faint graticule behind the occupancy bars. */
+    for (int gy = 12; gy < 47; gy += 9)
+        for (int x = 0; x < WIDTH; x += 4) px(x, gy, c->dark);
+
     /* Occupancy bars: 160 columns, 1 px each; upper area is 1/3 shorter. */
     for (int x = 0; x < SCAN_COLS; x++) {
         unsigned ch = (unsigned)x * (SCAN_CHANNELS - 1) / (SCAN_COLS - 1);
@@ -512,9 +516,9 @@ void st7735_draw_scan(const scan_view_t *v)
     text3x5(112, 59, v->have_baseline ? "BASE" : "NOBASE", 1, c->dim);
     if (!v->radio_ok && !v->booting) text3x5(136, 59, "K4 RST", 1, c->dim);
 
-    /* 160 x 21 waterfall, newest row at the top. */
+    /* 160 x 32 continuous waterfall, newest row at the top. */
     for (int r = 0; r < SCAN_ROWS; r++) {
-        int y = 64 + r * 3;
+        int y = 64 + r * 2;
         for (int x = 0; x < SCAN_COLS; x++) {
             uint16_t col = s_heat[v->wf[r][x]];
             px(x, y, col);

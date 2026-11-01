@@ -5,7 +5,7 @@
 
 #define SCAN_CHANNELS 126
 #define SCAN_COLS 160
-#define SCAN_ROWS 21
+#define SCAN_ROWS 32
 
 typedef struct {
     uint8_t duty[SCAN_CHANNELS];   /* 0..100 RPD busy per 1 MHz channel */
