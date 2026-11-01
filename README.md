@@ -7,6 +7,11 @@
 > 独立固件，和 `esp32-s3-st7735-sdr` 的 SDR 固件分开。NRF 和 SDR 都占用
 > 2.4GHz，不能同时跑；本固件不初始化 WiFi/PHY。
 
+![RF SENSE 实机](docs/images/rf-sense.jpg)
+
+*RF SENSE 实机：AB 链路，TX/RX/FAIL/RETRY，LINK/RF 统计，底部 AB/RF/MOTION 三条历史。*
+  照片里 LINK 0% 是当时 A 模块接触不良，正常时 LINK 接近 100%。*
+
 ## 接线
 
 ST7735 和按键沿用 SDR 的接法：
