@@ -9,7 +9,7 @@
 #include "freertos/task.h"
 #include "nrf24.h"
 
-#define SCAN_SAMPLES 10
+#define SCAN_SAMPLES 8
 #define SCAN_SAMPLE_US 500
 #define REG_RPD 0x09
 

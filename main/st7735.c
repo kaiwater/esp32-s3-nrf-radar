@@ -21,7 +21,7 @@
 #define WIDTH 160
 #define HEIGHT 128
 #define STRIP_H 8
-#define STRIP_PIXELS (WIDTH * STRIP_H)
+#define FRAME_PIXELS (WIDTH * HEIGHT)
 
 #define PIN_SCK 12
 #define PIN_MOSI 11
@@ -73,8 +73,8 @@ static const char *TAG = "st7735";
 static esp_lcd_panel_handle_t s_panel;
 static esp_lcd_panel_io_handle_t s_io;
 static SemaphoreHandle_t s_flush_done;
-static uint16_t *s_strip;
-static int s_strip_y;
+static uint16_t *s_fb;
+static int s_fb_y;
 static uint8_t s_hist[3][HIST_W];
 static uint16_t s_heat[256];
 static unsigned s_theme = 1;  /* T2 AMBER default */
@@ -169,20 +169,19 @@ static unsigned glyph3x5(char c)
 
 static void px(int x, int y, uint16_t color)
 {
-    int row = y - s_strip_y;
-    if (x < 0 || x >= WIDTH || row < 0 || row >= STRIP_H) return;
-    s_strip[row * WIDTH + x] = color;
+    if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return;
+    s_fb[y * WIDTH + x] = color;
 }
 
 static void rect(int x, int y, int w, int h, uint16_t color)
 {
     if (x < 0) { w += x; x = 0; }
+    if (y < 0) { h += y; y = 0; }
     if (x + w > WIDTH) w = WIDTH - x;
-    if (w <= 0) return;
-    int y0 = y < s_strip_y ? s_strip_y : y;
-    int y1 = y + h > s_strip_y + STRIP_H ? s_strip_y + STRIP_H : y + h;
-    for (int yy = y0; yy < y1; yy++)
-        for (int xx = x; xx < x + w; xx++) s_strip[(yy - s_strip_y) * WIDTH + xx] = color;
+    if (y + h > HEIGHT) h = HEIGHT - y;
+    if (w <= 0 || h <= 0) return;
+    for (int yy = y; yy < y + h; yy++)
+        for (int xx = x; xx < x + w; xx++) s_fb[yy * WIDTH + xx] = color;
 }
 
 static void text3x5(int x, int y, const char *s, int scale, uint16_t color)
@@ -214,8 +213,8 @@ static void clear_strip(void)
 {
     uint16_t bg = s_themes[s_theme].bg;
     uint32_t pair = ((uint32_t)bg << 16) | bg;
-    uint32_t *p = (uint32_t *)s_strip;
-    for (int i = 0; i < STRIP_PIXELS / 2; i++) p[i] = pair;
+    uint32_t *p = (uint32_t *)s_fb;
+    for (int i = 0; i < FRAME_PIXELS / 2; i++) p[i] = pair;
 }
 
 static uint16_t mix565(uint16_t a, uint16_t b, unsigned num, unsigned den)
@@ -268,7 +267,7 @@ void st7735_init(void)
         .miso_io_num = -1,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
-        .max_transfer_sz = STRIP_PIXELS * sizeof(uint16_t),
+        .max_transfer_sz = FRAME_PIXELS * sizeof(uint16_t),
     };
     ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO));
 
@@ -309,12 +308,12 @@ void st7735_init(void)
     ESP_ERROR_CHECK(gpio_config(&bl));
     ESP_ERROR_CHECK(gpio_set_level(PIN_BL, 1));
 
-    s_strip = heap_caps_malloc(STRIP_PIXELS * sizeof(uint16_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-    if (!s_strip) {
+    s_fb = heap_caps_malloc(FRAME_PIXELS * sizeof(uint16_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    if (!s_fb) {
         ESP_LOGE(TAG, "no memory for strip buffer");
         abort();
     }
-    memset(s_strip, 0, STRIP_PIXELS * sizeof(uint16_t));
+    memset(s_fb, 0, FRAME_PIXELS * sizeof(uint16_t));
     memset(s_hist, 0, sizeof(s_hist));
     build_heat();
 
@@ -330,7 +329,7 @@ void st7735_init(void)
 
 void st7735_draw_radar(const radar_view_t *v)
 {
-    if (!s_panel || !s_strip || !v) return;
+    if (!s_panel || !s_fb || !v) return;
     const ui_theme_t *c = &s_themes[s_theme];
     bool ab = v->nlinks > 0 && v->link[0].active;
 
@@ -349,7 +348,7 @@ void st7735_draw_radar(const radar_view_t *v)
     snprintf(th, sizeof(th), "T%u %s", s_theme + 1, c->abbr);
 
     for (int y0 = 0; y0 < HEIGHT; y0 += STRIP_H) {
-        s_strip_y = y0;
+        s_fb_y = y0;
         clear_strip();
 
         if (y0 < STATUS_Y) {
@@ -431,102 +430,91 @@ void st7735_draw_radar(const radar_view_t *v)
                 px(x, y + 8, live ? c->dim : c->dark);
         }
 
-        ESP_ERROR_CHECK(esp_lcd_panel_draw_bitmap(s_panel, 0, y0, WIDTH, y0 + STRIP_H, s_strip));
+        ESP_ERROR_CHECK(esp_lcd_panel_draw_bitmap(s_panel, 0, y0, WIDTH, y0 + STRIP_H, s_fb));
         if (s_flush_done) xSemaphoreTake(s_flush_done, pdMS_TO_TICKS(200));
     }
 }
 
 void st7735_draw_scan(const scan_view_t *v)
 {
-    if (!s_panel || !s_strip || !v) return;
+    if (!s_panel || !s_fb || !v) return;
     const ui_theme_t *c = &s_themes[s_theme];
 
-    for (int y0 = 0; y0 < HEIGHT; y0 += STRIP_H) {
-        s_strip_y = y0;
-        clear_strip();
+    clear_strip();
 
-        if (y0 < 12) {
-            text8(4, 1, "2.4G", 1, c->accent);
-            text8(44, 1, "SCAN", 1, c->text);
-            text3x5(136, 2, "0-82", 1, c->dim);
+    text8(4, 1, "2.4G", 1, c->accent);
+    text8(44, 1, "SCAN", 1, c->text);
+    text3x5(136, 2, "0-82", 1, c->dim);
+
+    for (int x = 0; x < SCAN_COLS; x++) {
+        unsigned ch = x * (SCAN_CHANNELS - 1) / (SCAN_COLS - 1);
+        int val = (v->delta_mode && v->have_baseline)
+                      ? (v->delta[ch] > 0 ? v->delta[ch] : 0)
+                      : v->duty[ch];
+        if (val < 0) val = 0;
+        if (val > 100) val = 100;
+        int h = val * 54 / 100;
+        uint16_t col = s_heat[val * 255 / 100];
+        for (int y = 66 - h; y <= 66; y++) {
+            px(x * 2, y, col);
+            px(x * 2 + 1, y, col);
         }
-
-        if (y0 < 68 && y0 + STRIP_H > 12) {
-            for (int x = 0; x < SCAN_COLS; x++) {
-                unsigned ch = x * (SCAN_CHANNELS - 1) / (SCAN_COLS - 1);
-                int val = (v->delta_mode && v->have_baseline)
-                              ? (v->delta[ch] > 0 ? v->delta[ch] : 0)
-                              : v->duty[ch];
-                if (val < 0) val = 0;
-                if (val > 100) val = 100;
-                int h = val * 54 / 100;
-                uint16_t col = s_heat[val * 255 / 100];
-                for (int y = 66 - h; y <= 66; y++) {
-                    px(x * 2, y, col);
-                    px(x * 2 + 1, y, col);
-                }
-            }
-            for (int x = 0; x < WIDTH; x++) px(x, 67, c->dim);
-            if (v->cursor_on) {
-                int cx = (int)v->cursor_ch * (SCAN_COLS - 1) / (SCAN_CHANNELS - 1);
-                for (int y = 12; y <= 66; y++) {
-                    px(cx * 2, y, c->text);
-                    px(cx * 2 + 1, y, c->text);
-                }
-            }
-        }
-
-        char s[32];
-        if (y0 + STRIP_H > 70 && y0 <= 78) {
-            int freq = 2400 + (int)v->peak_ch;
-            if (v->delta_mode && v->have_baseline)
-                snprintf(s, sizeof(s), "PEAK %d %+d", freq, v->peak_val);
-            else
-                snprintf(s, sizeof(s), "PEAK %d %d%%", freq, v->peak_val);
-            text8(4, 70, s, 1, c->text);
-            text3x5(140, 72, v->delta_mode ? "DLT" : "ABS", 1, c->accent);
-        }
-
-        if (y0 + STRIP_H > 79 && y0 <= 87) {
-            if (v->booting) {
-                text8(4, 79, "BOOTING", 1, c->text);
-            } else if (!v->radio_ok) {
-                text8(4, 79, "NO NRF", 1, c->dim);
-            } else if (v->paused) {
-                text8(4, 79, "PAUSED", 1, c->dim);
-            } else if (v->cursor_on) {
-                int freq = 2400 + (int)v->cursor_ch;
-                int val = (v->delta_mode && v->have_baseline)
-                              ? (v->delta[v->cursor_ch] > 0 ? v->delta[v->cursor_ch] : 0)
-                              : v->duty[v->cursor_ch];
-                if (v->delta_mode && v->have_baseline)
-                    snprintf(s, sizeof(s), "CUR %d %+d", freq, val);
-                else
-                    snprintf(s, sizeof(s), "CUR %d %d%%", freq, val);
-                text8(4, 79, s, 1, c->text);
-            } else {
-                snprintf(s, sizeof(s), "SCAN %u", v->scans);
-                text8(4, 79, s, 1, c->dim);
-            }
-            text3x5(104, 81, v->have_baseline ? "BASE" : "NOBASE", 1, c->dim);
-            if (!v->radio_ok && !v->booting) text3x5(136, 81, "K4 RST", 1, c->dim);
-        }
-
-        for (int r = 0; r < SCAN_ROWS; r++) {
-            int y = 87 + r * 6;
-            if (y >= y0 + STRIP_H || y + 5 <= y0) continue;
-            for (int x = 0; x < SCAN_COLS; x++) {
-                uint16_t col = s_heat[v->wf[r][x]];
-                for (int k = 0; k < 5; k++) {
-                    px(x * 2, y + k, col);
-                    px(x * 2 + 1, y + k, col);
-                }
-            }
-        }
-
-        ESP_ERROR_CHECK(esp_lcd_panel_draw_bitmap(s_panel, 0, y0, WIDTH, y0 + STRIP_H, s_strip));
-        if (s_flush_done) xSemaphoreTake(s_flush_done, pdMS_TO_TICKS(200));
     }
+    for (int x = 0; x < WIDTH; x++) px(x, 67, c->dim);
+
+    if (v->cursor_on) {
+        int cx = (int)v->cursor_ch * (SCAN_COLS - 1) / (SCAN_CHANNELS - 1);
+        for (int y = 12; y <= 66; y++) {
+            px(cx * 2, y, c->text);
+            px(cx * 2 + 1, y, c->text);
+        }
+    }
+
+    char s[32];
+    int freq = 2400 + (int)v->peak_ch;
+    if (v->delta_mode && v->have_baseline)
+        snprintf(s, sizeof(s), "PEAK %d %+d", freq, v->peak_val);
+    else
+        snprintf(s, sizeof(s), "PEAK %d %d%%", freq, v->peak_val);
+    text8(4, 70, s, 1, c->text);
+    text3x5(140, 72, v->delta_mode ? "DLT" : "ABS", 1, c->accent);
+
+    if (v->booting) {
+        text8(4, 79, "BOOTING", 1, c->text);
+    } else if (!v->radio_ok) {
+        text8(4, 79, "NO NRF", 1, c->dim);
+    } else if (v->paused) {
+        text8(4, 79, "PAUSED", 1, c->dim);
+    } else if (v->cursor_on) {
+        int cf = 2400 + (int)v->cursor_ch;
+        int val = (v->delta_mode && v->have_baseline)
+                      ? (v->delta[v->cursor_ch] > 0 ? v->delta[v->cursor_ch] : 0)
+                      : v->duty[v->cursor_ch];
+        if (v->delta_mode && v->have_baseline)
+            snprintf(s, sizeof(s), "CUR %d %+d", cf, val);
+        else
+            snprintf(s, sizeof(s), "CUR %d %d%%", cf, val);
+        text8(4, 79, s, 1, c->text);
+    } else {
+        snprintf(s, sizeof(s), "SCAN %u", v->scans);
+        text8(4, 79, s, 1, c->dim);
+    }
+    text3x5(104, 81, v->have_baseline ? "BASE" : "NOBASE", 1, c->dim);
+    if (!v->radio_ok && !v->booting) text3x5(136, 81, "K4 RST", 1, c->dim);
+
+    for (int r = 0; r < SCAN_ROWS; r++) {
+        int y = 87 + r * 6;
+        for (int x = 0; x < SCAN_COLS; x++) {
+            uint16_t col = s_heat[v->wf[r][x]];
+            for (int k = 0; k < 5; k++) {
+                px(x * 2, y + k, col);
+                px(x * 2 + 1, y + k, col);
+            }
+        }
+    }
+
+    ESP_ERROR_CHECK(esp_lcd_panel_draw_bitmap(s_panel, 0, 0, WIDTH, HEIGHT, s_fb));
+    if (s_flush_done) xSemaphoreTake(s_flush_done, pdMS_TO_TICKS(200));
 }
 
 int st7735_button(void)
