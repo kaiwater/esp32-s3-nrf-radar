@@ -330,7 +330,10 @@ void st7735_draw_radar(const radar_view_t *v)
             const char *st = "CLEAR";
             uint16_t sc = c->accent;
             char m[20];
-            if (v->nlinks == 0) {
+            if (v->booting) {
+                st = "BOOTING";
+                sc = c->text;
+            } else if (v->nlinks == 0) {
                 if (v->modules == 0) {
                     st = "NO NRF";
                     sc = c->dim;

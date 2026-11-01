@@ -58,12 +58,17 @@ void radar_init(radar_t *r)
         return;
     }
 
-    vTaskDelay(pdMS_TO_TICKS(100));
+    /* Bulk capacitors on a breadboard take a while to settle and the
+     * NRF24L01 needs ~100 ms after power-up.  Probe several times. */
+    vTaskDelay(pdMS_TO_TICKS(600));
 
     const int csn[3] = NRF_CSN_PINS;
     const int ce[3] = NRF_CE_PINS;
     for (int i = 0; i < 3; i++) {
-        r->present[i] = nrf_init(&r->nrf[i], csn[i], ce[i]);
+        for (int attempt = 0; attempt < 5 && !r->present[i]; attempt++) {
+            r->present[i] = nrf_init(&r->nrf[i], csn[i], ce[i]);
+            if (!r->present[i]) vTaskDelay(pdMS_TO_TICKS(200));
+        }
         if (r->present[i]) r->view.modules |= 1u << i;
     }
 

@@ -103,9 +103,20 @@ bool nrf_bus_init(void)
 
 bool nrf_init(nrf_t *n, int csn_pin, int ce_pin)
 {
-    memset(n, 0, sizeof(*n));
     n->csn_pin = csn_pin;
     n->ce_pin = ce_pin;
+    if (n->spi == NULL) {
+        const spi_device_interface_config_t dev = {
+            .clock_speed_hz = 4 * 1000 * 1000,
+            .mode = 0,
+            .spics_io_num = csn_pin,
+            .queue_size = 1,
+        };
+        if (spi_bus_add_device(SPI3_HOST, &dev, &n->spi) != ESP_OK) {
+            ESP_LOGE(TAG, "no SPI device for CSN %d", csn_pin);
+            return false;
+        }
+    }
 
     const gpio_config_t io = {
         .pin_bit_mask = 1ULL << ce_pin,
@@ -113,17 +124,6 @@ bool nrf_init(nrf_t *n, int csn_pin, int ce_pin)
     };
     ESP_ERROR_CHECK(gpio_config(&io));
     ESP_ERROR_CHECK(gpio_set_level(ce_pin, 0));
-
-    const spi_device_interface_config_t dev = {
-        .clock_speed_hz = 4 * 1000 * 1000,
-        .mode = 0,
-        .spics_io_num = csn_pin,
-        .queue_size = 1,
-    };
-    if (spi_bus_add_device(SPI3_HOST, &dev, &n->spi) != ESP_OK) {
-        ESP_LOGE(TAG, "no SPI device for CSN %d", csn_pin);
-        return false;
-    }
 
     /* A missing module reads 0x00 or 0xFF.  Write two registers and read
      * them back before trusting the link. */

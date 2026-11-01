@@ -49,5 +49,11 @@ static void radar_task(void *arg)
 void app_main(void)
 {
     st7735_init();
+
+    radar_view_t boot = {0};
+    boot.channel = 80;
+    boot.booting = true;
+    st7735_draw_radar(&boot);
+
     xTaskCreatePinnedToCore(radar_task, "radar", 8192, NULL, 5, NULL, 0);
 }

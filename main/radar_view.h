@@ -26,4 +26,5 @@ typedef struct {
     bool motion;
     bool paused;
     bool calibrating;
+    bool booting;
 } radar_view_t;
