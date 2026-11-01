@@ -144,6 +144,10 @@ void radar_step(radar_t *r)
         nrf_standby(txr);
         nrf_standby(rxr);
 
+        if (l == 0) {
+            ESP_LOGI(TAG, "AB got %u/%u retries %u", got, RADAR_PACKETS, retries);
+        }
+
         unsigned loss = (RADAR_PACKETS - got) * 100u / RADAR_PACKETS;
         r->view.link[l].loss_pct = loss;
         r->view.link[l].retries = retries;

@@ -139,7 +139,7 @@ bool nrf_init(nrf_t *n, int csn_pin, int ce_pin)
     nrf_write_reg(n, REG_SETUP_AW, 0x03);    /* 5-byte address */
     nrf_write_reg(n, REG_SETUP_RETR, 0x13);  /* 500 us, 3 retries */
     nrf_write_reg(n, REG_RF_CH, 80);         /* 2480 MHz */
-    nrf_write_reg(n, REG_RF_SETUP, 0x26);    /* 250 kbps, PA max */
+    nrf_write_reg(n, REG_RF_SETUP, 0x06);    /* 1 Mbps, PA max (clone-safe) */
     nrf_write_reg(n, REG_RX_PW_P0, 8);
     nrf_write_reg(n, REG_STATUS, 0x70);
     flush_tx(n);

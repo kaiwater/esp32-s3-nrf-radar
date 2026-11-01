@@ -37,11 +37,12 @@
 
 #define STATUS_Y 18
 #define LINK_Y 24
-#define LINK_STEP 18
-#define HIST_Y 76
+#define LINK_STEP 16
+#define HIST_Y 100
 #define HIST_STEP 9
-#define STATS1_Y 104
-#define STATS2_Y 114
+#define STATS1_Y 68
+#define STATS2_Y 78
+#define STATS3_Y 88
 
 #define BTN_LONG_MS 700
 
@@ -389,8 +390,12 @@ void st7735_draw_radar(const radar_view_t *v)
             text8(4, STATS1_Y, s, 1, c->text);
         }
         if (y0 + STRIP_H > STATS2_Y && y0 <= STATS2_Y + 8) {
-            snprintf(s, sizeof(s), "F%lu N%u R%lu", v->fail, v->noise, v->retry);
-            text8(4, STATS2_Y, s, 1, c->dim);
+            snprintf(s, sizeof(s), "FAIL%lu RETRY%lu", v->fail, v->retry);
+            text8(4, STATS2_Y, s, 1, c->text);
+        }
+        if (y0 + STRIP_H > STATS3_Y && y0 <= STATS3_Y + 8) {
+            snprintf(s, sizeof(s), "NOISE%u", v->noise);
+            text8(4, STATS3_Y, s, 1, c->accent);
         }
 
         ESP_ERROR_CHECK(esp_lcd_panel_draw_bitmap(s_panel, 0, y0, WIDTH, y0 + STRIP_H, s_strip));
