@@ -33,6 +33,22 @@ static void handle_event(int b, scan_view_t *v)
     case 4:
         v->paused = !v->paused;
         break;
+    case 11:   /* long K1: cursor left */
+        v->cursor_on = true;
+        if (v->cursor_ch > 0) v->cursor_ch--;
+        break;
+    case 12:   /* long K2: cursor right */
+        v->cursor_on = true;
+        if (v->cursor_ch < SCAN_CHANNELS - 1) v->cursor_ch++;
+        break;
+    case 21:   /* K1 repeat */
+        v->cursor_on = true;
+        if (v->cursor_ch > 0) v->cursor_ch--;
+        break;
+    case 22:   /* K2 repeat */
+        v->cursor_on = true;
+        if (v->cursor_ch < SCAN_CHANNELS - 1) v->cursor_ch++;
+        break;
     case 13:
         st7735_next_theme();
         break;

@@ -467,6 +467,13 @@ void st7735_draw_scan(const scan_view_t *v)
                 }
             }
             for (int x = 0; x < WIDTH; x++) px(x, 67, c->dim);
+            if (v->cursor_on) {
+                int cx = (int)v->cursor_ch * (SCAN_COLS - 1) / (SCAN_CHANNELS - 1);
+                for (int y = 12; y <= 66; y++) {
+                    px(cx * 2, y, c->text);
+                    px(cx * 2 + 1, y, c->text);
+                }
+            }
         }
 
         char s[32];
@@ -487,11 +494,21 @@ void st7735_draw_scan(const scan_view_t *v)
                 text8(4, 79, "NO NRF", 1, c->dim);
             } else if (v->paused) {
                 text8(4, 79, "PAUSED", 1, c->dim);
+            } else if (v->cursor_on) {
+                int freq = 2400 + (int)v->cursor_ch;
+                int val = (v->delta_mode && v->have_baseline)
+                              ? (v->delta[v->cursor_ch] > 0 ? v->delta[v->cursor_ch] : 0)
+                              : v->duty[v->cursor_ch];
+                if (v->delta_mode && v->have_baseline)
+                    snprintf(s, sizeof(s), "CUR %d %+d", freq, val);
+                else
+                    snprintf(s, sizeof(s), "CUR %d %d%%", freq, val);
+                text8(4, 79, s, 1, c->text);
             } else {
                 snprintf(s, sizeof(s), "SCAN %u", v->scans);
                 text8(4, 79, s, 1, c->dim);
             }
-            text3x5(100, 81, v->have_baseline ? "BASE" : "NOBASE", 1, c->dim);
+            text3x5(104, 81, v->have_baseline ? "BASE" : "NOBASE", 1, c->dim);
             if (!v->radio_ok && !v->booting) text3x5(136, 81, "K4 RST", 1, c->dim);
         }
 

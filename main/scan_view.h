@@ -21,4 +21,6 @@ typedef struct {
     unsigned peak_ch;
     int peak_val;
     unsigned scans;
+    unsigned cursor_ch;
+    bool cursor_on;
 } scan_view_t;
