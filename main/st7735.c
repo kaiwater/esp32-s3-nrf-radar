@@ -228,35 +228,20 @@ static uint16_t mix565(uint16_t a, uint16_t b, unsigned num, unsigned den)
     return (uint16_t)((r << 11) | (g << 5) | bl);
 }
 
-typedef struct {
-    uint8_t at;
-    uint16_t color;
-} heat_stop_t;
-
-static uint16_t heat_ramp(const heat_stop_t *s, int n, unsigned v)
-{
-    if (v <= s[0].at) return s[0].color;
-    for (int i = 1; i < n; i++) {
-        if (v <= s[i].at) {
-            unsigned span = s[i].at - s[i - 1].at;
-            return mix565(s[i - 1].color, s[i].color, v - s[i - 1].at, span);
-        }
-    }
-    return s[n - 1].color;
-}
-
 static void build_heat(void)
 {
-    /* Warm waterfall: near-black brown -> deep red -> orange -> amber -> cream. */
-    static const heat_stop_t stops[] = {
-        {0, RGB565(0x10, 0x04, 0x00)},
-        {40, RGB565(0x5A, 0x10, 0x00)},
-        {90, RGB565(0xB0, 0x28, 0x00)},
-        {140, RGB565(0xF0, 0x70, 0x00)},
-        {200, RGB565(0xFF, 0xC0, 0x30)},
-        {255, RGB565(0xFF, 0xF4, 0xD0)},
-    };
-    for (unsigned v = 0; v < 256; v++) s_heat[v] = heat_ramp(stops, 6, v);
+    /* Each theme uses its own dim -> accent -> text -> white ramp.  The
+     * low end is dim, not the background, so the waterfall stays visible. */
+    const ui_theme_t *c = &s_themes[s_theme];
+    for (unsigned v = 0; v < 256; v++) {
+        if (v < 64) {
+            s_heat[v] = mix565(c->dim, c->accent, v, 64);
+        } else if (v < 160) {
+            s_heat[v] = mix565(c->accent, c->text, v - 64, 96);
+        } else {
+            s_heat[v] = mix565(c->text, 0xFFFF, v - 160, 95);
+        }
+    }
 }
 
 static bool on_color_done(esp_lcd_panel_io_handle_t io, esp_lcd_panel_io_event_data_t *edata, void *ctx)
@@ -272,6 +257,7 @@ static bool on_color_done(esp_lcd_panel_io_handle_t io, esp_lcd_panel_io_event_d
 void st7735_next_theme(void)
 {
     s_theme = (s_theme + 1) % THEME_COUNT;
+    build_heat();
 }
 
 void st7735_init(void)
