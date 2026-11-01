@@ -13,11 +13,34 @@
 #define REG_RPD 0x09
 
 static const char *TAG = "scanner";
-static nrf_t s_radio;
-static bool s_ok;
+static nrf_t s_radio, s_radio2;
+static bool s_ok, s_ok2;
 static uint8_t s_duty[SCAN_CHANNELS];
 static uint8_t s_base[SCAN_CHANNELS];
 static uint8_t s_wf[SCAN_ROWS][SCAN_COLS];
+
+#define PAIR_COUNT 42u   /* A: 0..41, B: 42..82 */
+
+static void scan_pair(unsigned i)
+{
+    unsigned cha = i, chb = i + PAIR_COUNT;
+    nrf_set_channel(&s_radio, (uint8_t)cha);
+    nrf_set_channel(&s_radio2, (uint8_t)chb);
+    nrf_rx_mode(&s_radio);
+    nrf_rx_mode(&s_radio2);
+
+    unsigned ha = 0, hb = 0;
+    for (int s = 0; s < SCAN_SAMPLES; s++) {
+        if (nrf_read_reg(&s_radio, REG_RPD) & 1u) ha++;
+        if (chb < SCAN_CHANNELS && (nrf_read_reg(&s_radio2, REG_RPD) & 1u)) hb++;
+        esp_rom_delay_us(SCAN_SAMPLE_US);
+    }
+    nrf_standby(&s_radio);
+    nrf_standby(&s_radio2);
+
+    s_duty[cha] = (uint8_t)(ha * 100u / SCAN_SAMPLES);
+    if (chb < SCAN_CHANNELS) s_duty[chb] = (uint8_t)(hb * 100u / SCAN_SAMPLES);
+}
 
 static uint8_t scan_one(uint8_t ch)
 {
@@ -52,25 +75,38 @@ bool scanner_init(void)
     const int csn[3] = NRF_CSN_PINS;
     const int ce[3] = NRF_CE_PINS;
     static nrf_t cand[3];
+    nrf_t found[2];
+    int nfound = 0;
 
-    for (int i = 0; i < 3 && !s_ok; i++) {
-        for (int attempt = 0; attempt < 3 && !s_ok; attempt++) {
+    for (int i = 0; i < 3 && nfound < 2; i++) {
+        for (int attempt = 0; attempt < 3; attempt++) {
             if (nrf_init(&cand[i], csn[i], ce[i])) {
-                s_radio = cand[i];
-                s_ok = true;
+                found[nfound++] = cand[i];
                 break;
             }
             vTaskDelay(pdMS_TO_TICKS(300));
         }
     }
 
-    if (!s_ok) {
+    if (!nfound) {
         ESP_LOGW(TAG, "no NRF24L01 found");
         return false;
     }
 
+    s_radio = found[0];
+    s_ok = true;
+    if (nfound > 1) {
+        s_radio2 = found[1];
+        s_ok2 = true;
+    }
+
     nrf_set_channel(&s_radio, 0);
-    ESP_LOGI(TAG, "using CSN %d", s_radio.csn_pin);
+    if (s_ok2) {
+        nrf_set_channel(&s_radio2, PAIR_COUNT);
+        ESP_LOGI(TAG, "using CSN %d + %d", s_radio.csn_pin, s_radio2.csn_pin);
+    } else {
+        ESP_LOGI(TAG, "using CSN %d (single)", s_radio.csn_pin);
+    }
     return true;
 }
 
@@ -87,8 +123,12 @@ void scanner_step(scan_view_t *v)
     v->booting = false;
     if (v->paused) return;
 
-    for (unsigned ch = 0; ch < SCAN_CHANNELS; ch++) {
-        s_duty[ch] = scan_one((uint8_t)ch);
+    if (s_ok2) {
+        for (unsigned i = 0; i < PAIR_COUNT; i++) scan_pair(i);
+    } else {
+        for (unsigned ch = 0; ch < SCAN_CHANNELS; ch++) {
+            s_duty[ch] = scan_one((uint8_t)ch);
+        }
     }
 
     for (unsigned ch = 0; ch < SCAN_CHANNELS; ch++) {
