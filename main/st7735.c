@@ -242,13 +242,14 @@ static void build_heat(void)
     /* Each theme uses its own dim -> accent -> text -> white ramp.  The
      * low end is dim, not the background, so the waterfall stays visible. */
     const ui_theme_t *c = &s_themes[s_theme];
+    /* Dark waterfall: background -> dim -> half-strength accent.
+     * Never mix up to text/white; the field stays low-glare. */
+    uint16_t dark_accent = mix565(c->accent, c->bg, 1, 2);
     for (unsigned v = 0; v < 256; v++) {
-        if (v < 64) {
-            s_heat[v] = mix565(c->dim, c->accent, v, 64);
-        } else if (v < 160) {
-            s_heat[v] = mix565(c->accent, c->text, v - 64, 96);
+        if (v < 128) {
+            s_heat[v] = mix565(c->bg, c->dim, v, 128);
         } else {
-            s_heat[v] = mix565(c->text, 0xFFFF, v - 160, 95);
+            s_heat[v] = mix565(c->dim, dark_accent, v - 128, 127);
         }
     }
 }
@@ -474,8 +475,7 @@ void st7735_draw_scan(const scan_view_t *v)
         if (val < 0) val = 0;
         if (val > 100) val = 100;
         int h = val * 35 / 100;
-        uint16_t col = s_heat[val * 255 / 100];
-        for (int y = 47 - h; y <= 47; y++) px(x, y, col);
+        for (int y = 47 - h; y <= 47; y++) px(x, y, c->accent);
     }
     for (int x = 0; x < WIDTH; x++) px(x, 48, c->dim);
 
